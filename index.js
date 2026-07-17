@@ -17,7 +17,10 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use('/',(req,res)=>{return res.status(200).send('API is running for Sarees Website!')});
+
+app.get('/', (req, res) => {
+    res.send('API is running for Sarees Website!');
+});
 
 app.use("/new", loginRoutes);
 
