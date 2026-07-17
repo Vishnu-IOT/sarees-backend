@@ -10,13 +10,13 @@ jobs:
       - name: Create SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.SERVER_SAREE_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
       - name: connect ssh server
         run: |
           ssh -o StrictHostKeyChecking=no \
           -i ~/.ssh/id_rsa \
-          ubuntu@${{ secrets.SERVER_IP_ADDR }} << 'EOF'
+          ubuntu@${{ secrets.SERVER_SAREE_IP_ADDR }} << 'EOF'
           cd /home/ubuntu/sarees-backend
           git pull origin main
           npm install
