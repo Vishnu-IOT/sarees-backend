@@ -16,7 +16,7 @@ async function Login(req, res) {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User name.email and password is not found",
+        message: "User name,email and password is not found",
       });
     }
 
