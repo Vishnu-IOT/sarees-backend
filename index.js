@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const loginRoutes = require("./routes/authRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
+const productRoutes = require("./routes/productRoutes");
 require("dotenv").config();
 const sequelize = require("./config/mysqldb");
 
@@ -23,6 +25,9 @@ app.get('/', (req, res) => {
 });
 
 app.use("/new", loginRoutes);
+app.use("/category", categoryRoutes);
+app.use("/products", productRoutes);
+
 
 const port = process.env.PORT || 5002;
 app.listen(port, () => console.log("Server running on port 5002"));
