@@ -19,7 +19,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/',(req,res)=>{return res.status(200).send('API is running for Sarees Website!')});
 
-app.use("/sarees", loginRoutes);
+app.use("/new", loginRoutes);
 
 const port = process.env.PORT || 5002;
 app.listen(port, () => console.log("Server running on port 5002"));
