@@ -6,15 +6,6 @@ const productRoutes = require("./routes/productRoutes");
 require("dotenv").config();
 const sequelize = require("./config/mysqldb");
 
-(async () => {
-    try {
-        await sequelize.authenticate();
-        console.log("Database Connected");
-    } catch (err) {
-        console.log(err);
-    }
-})();
-
 const app = express();
 
 app.use(cors());
