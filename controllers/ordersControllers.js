@@ -131,13 +131,32 @@ async function CreateOrder(req, res) {
             });
         }
 
-        // Generate Order Number
-        const orderNumber = `ORD${Date.now()}`;
+        // Order number: timestamp + short random suffix to avoid collisions
+        // if two orders land in the same millisecond.
+        const orderNumber = `ORD${Date.now()}${Math.floor(Math.random() * 900 + 100)}`;
 
         let subtotal = 0;
         const orderItems = [];
 
         for (const item of items) {
+            const quantity = Number(item.quantity);
+
+            if (!item.productId) {
+                await transaction.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: "Each item must include a productId.",
+                });
+            }
+
+            if (!Number.isInteger(quantity) || quantity <= 0) {
+                await transaction.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid quantity for product ${item.productId}.`,
+                });
+            }
+
             const product = await Product.findByPk(item.productId, {
                 include: [
                     {
@@ -156,26 +175,55 @@ async function CreateOrder(req, res) {
                 });
             }
 
-            const attributes = product.attributes;
+            // ✅ product.attributes is an ARRAY of variants (color/sku/image
+            // per option) — we need to pick the specific one the customer
+            // chose via item.attributeId, not the array itself.
+            const variants = product.attributes || [];
+            let selectedAttribute = null;
+
+            if (item.attributeId) {
+                selectedAttribute = variants.find(
+                    (attr) => String(attr.id) === String(item.attributeId)
+                );
+
+                if (!selectedAttribute) {
+                    await transaction.rollback();
+                    return res.status(400).json({
+                        success: false,
+                        message: `Selected variant not found for product ${item.productId}.`,
+                    });
+                }
+            } else if (variants.length === 1) {
+                // Only one variant exists — safe to default to it.
+                selectedAttribute = variants[0];
+            } else if (variants.length > 1) {
+                // Multiple variants exist and none was specified — don't
+                // silently guess which one the customer meant.
+                await transaction.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: `attributeId is required for product ${item.productId} (multiple variants available).`,
+                });
+            }
 
             const price =
                 Number(product.offerPrice) > 0
                     ? Number(product.offerPrice)
                     : Number(product.price);
 
-            const lineTotal = price * Number(item.quantity);
+            const lineTotal = price * quantity;
 
             subtotal += lineTotal;
 
             orderItems.push({
                 productId: product.id,
                 productName: product.name,
-                sku: attributes?.sku || null,
-                image_url: attributes?.image_url || null,
-                color: attributes?.color || null,
-                size: attributes?.size || null,
-                fabric: attributes?.fabric || null,
-                quantity: item.quantity,
+                sku: selectedAttribute?.sku || null,
+                image_url: selectedAttribute?.image_url || null,
+                color: selectedAttribute?.color || null,
+                size: selectedAttribute?.size || null,
+                fabric: selectedAttribute?.fabric || null,
+                quantity,
                 price,
                 discount: product.discount || 0,
                 subtotal: lineTotal,
