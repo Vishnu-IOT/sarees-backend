@@ -85,7 +85,7 @@ const ProductAttribute = sequelize.define(
 
 Product.hasMany(ProductAttribute, {
     foreignKey: "productId",
-    as: "attribute",
+    as: "attributes",
 });
 
 ProductAttribute.belongsTo(Product, {
