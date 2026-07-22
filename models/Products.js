@@ -1,6 +1,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/mysqldb");
 const Category = require("./Category");
+const SubCategory = require("./SubCategory");
 
 const Product = sequelize.define(
     "Product",
@@ -37,8 +38,8 @@ const Product = sequelize.define(
             allowNull: false,
         },
 
-        image: {
-            type: DataTypes.TEXT,
+        subcategoryId: {
+            type: DataTypes.INTEGER,
             allowNull: false,
         },
 
@@ -50,6 +51,25 @@ const Product = sequelize.define(
         status: {
             type: DataTypes.ENUM("active", "inactive"),
             defaultValue: "active",
+        },
+        slug: {
+            type: DataTypes.STRING,
+            unique: true,
+        },
+
+        offerPrice: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+
+        isFeatured: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+        },
+
+        isNewArrival: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
         },
     },
     {
@@ -65,6 +85,16 @@ Product.belongsTo(Category, {
 
 Category.hasMany(Product, {
     foreignKey: "categoryId",
+    as: "products",
+});
+
+Product.belongsTo(SubCategory, {
+    foreignKey: "subcategoryId",
+    as: "subcategory",
+});
+
+SubCategory.hasMany(Product, {
+    foreignKey: "subcategoryId",
     as: "products",
 });
 

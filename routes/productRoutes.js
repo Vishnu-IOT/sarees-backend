@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-
 const upload = require("../middlewares/upload");
 
 const {
@@ -11,15 +10,12 @@ const {
 } = require("../controllers/productController");
 
 router.get("/get-products", GetProducts);
-
 router.post(
     "/create-product",
     upload.single("image"),
     CreateProduct
 );
-
-router.put("/update-product/:id", UpdateProduct);
-
-router.delete("/delete-product/:id", DeleteProduct);
+router.post("/update-product/:id", UpdateProduct);
+router.post("/delete-product/:id", DeleteProduct);
 
 module.exports = router;

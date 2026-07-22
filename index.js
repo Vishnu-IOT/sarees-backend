@@ -3,6 +3,7 @@ const cors = require("cors");
 const loginRoutes = require("./routes/authRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const productRoutes = require("./routes/productRoutes");
+const ordersRoutes = require("./routes/ordersRoutes");
 require("dotenv").config();
 const sequelize = require("./config/mysqldb");
 
@@ -18,6 +19,7 @@ app.get('/', (req, res) => {
 app.use("/new", loginRoutes);
 app.use("/category", categoryRoutes);
 app.use("/products", productRoutes);
+app.use("/orders", ordersRoutes);
 
 
 const port = process.env.PORT || 5002;

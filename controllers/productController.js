@@ -1,6 +1,11 @@
 const Product = require("../models/Products");
 const Category = require("../models/Category");
 const supabase = require("../config/supabase");
+const SubCategory = require("../models/SubCategory");
+const ProductAttribute = require("../models/ProductAttributes");
+const fs = require("fs");
+const path = require("path");
+const sequelize = require("../config/mysqldb");
 
 // const fs = require("fs");
 // const path = require("path");
@@ -18,10 +23,35 @@ async function GetProducts(req, res) {
                     as: "category",
                     attributes: ["id", "category"],
                 },
+                {
+                    model: SubCategory,
+                    as: "subcategory",
+                    attributes: ["id", "name"],
+                },
+                {
+                    model: ProductAttribute,
+                    as: "attributes",
+                    attributes: [
+                        "id",
+                        "color",
+                        "image_url",
+                        "sku",
+                        "fabric",
+                        "work",
+                        "blouseLength",
+                        "occasion",
+                        "metal",
+                        "purity",
+                        "stone",
+                        "weight",
+                        "size",
+                    ],
+                },
             ],
+            order: [["createdAt", "DESC"]],
             limit,
             offset,
-            order: [["createdAt", "DESC"]],
+            distinct: true,
         });
 
         return res.status(200).json({
@@ -32,7 +62,7 @@ async function GetProducts(req, res) {
             total: count,
         });
     } catch (err) {
-        console.log(err);
+        console.error(err);
 
         return res.status(500).json({
             success: false,
@@ -42,83 +72,111 @@ async function GetProducts(req, res) {
 }
 
 async function CreateProduct(req, res) {
+    const transaction = await sequelize.transaction();
+
     try {
         const {
             name,
             desc,
             discount,
             price,
-            category,
+            offerPrice,
+            categoryId,
+            subcategoryId,
+            slug,
             loom,
             status,
+            isFeatured,
+            isNewArrival,
+            variants = [],
         } = req.body;
 
         let imageUrl = "";
 
-        if (req.file) {
-            const fileName = `uploads/product-${Date.now()}-${req.file.originalname}`;
+        if (req.files) {
+            const fileName = `${Date.now()}-${req.files.originalname}`;
 
-            const { error } = await supabase.storage
-                .from("uploads")
-                .upload(fileName, req.file.buffer, {
-                    contentType: req.file.mimetype,
-                    upsert: false,
-                });
+            const uploadPath = path.join(
+                __dirname,
+                "../public/uploads",
+                fileName
+            );
 
-            if (error) {
-                return res.status(500).json({
-                    success: false,
-                    message: "Image upload failed",
-                    error,
-                });
-            }
+            fs.writeFileSync(uploadPath, req.files.buffer);
 
-            const { data } = supabase.storage
-                .from("uploads")
-                .getPublicUrl(fileName);
-
-            imageUrl = data.publicUrl;
+            imageUrl = `/uploads/${fileName}`;
         }
 
-        /*
-        ===========================
-        LOCAL STORAGE (Commented)
-        ===========================
-    
-        if (req.file) {
-          const fileName = Date.now() + "-" + req.file.originalname;
-    
-          const uploadPath = path.join(
-            __dirname,
-            "../public/uploads",
-            fileName
-          );
-    
-          fs.writeFileSync(uploadPath, req.file.buffer);
-    
-          imageUrl = `/uploads/${fileName}`;
-        }
-    
-        */
+        const product = await Product.create(
+            {
+                name,
+                desc,
+                discount,
+                price,
+                offerPrice,
+                categoryId,
+                subcategoryId,
+                loom,
+                status,
+                slug,
+                isFeatured,
+                isNewArrival,
+            },
+            { transaction }
+        );
 
-        const product = await Product.create({
-            name,
-            desc,
-            discount,
-            price,
-            categoryId: category,
-            image: imageUrl,
-            loom,
-            status,
+        if (Array.isArray(variants) && variants.length > 0) {
+            const attributes = variants.map((variant, index) => ({
+                productId: product.id,
+                sku: variant.sku || null,
+                color: variant.color || null,
+                fabric: variant.fabric || null,
+                work: variant.work || null,
+                blouseLength: variant.blouseLength || null,
+                occasion: variant.occasion || null,
+                metal: variant.metal || null,
+                purity: variant.purity || null,
+                stone: variant.stone || null,
+                weight: variant.weight || null,
+                size: variant.size || null,
+                image_url: req.files[index]
+                    ? `/uploads/${req.files[index].filename}`
+                    : null
+            }));
+
+            await ProductAttribute.bulkCreate(attributes, {
+                transaction,
+            });
+        }
+
+        await transaction.commit();
+
+        const createdProduct = await Product.findByPk(product.id, {
+            include: [
+                {
+                    model: Category,
+                    as: "category",
+                },
+                {
+                    model: SubCategory,
+                    as: "subcategory",
+                },
+                {
+                    model: ProductAttribute,
+                    as: "attributes",
+                },
+            ],
         });
 
         return res.status(201).json({
             success: true,
             message: "Product created successfully",
-            data: product,
+            data: createdProduct,
         });
     } catch (err) {
-        console.log(err);
+        await transaction.rollback();
+
+        console.error(err);
 
         return res.status(500).json({
             success: false,
@@ -128,51 +186,218 @@ async function CreateProduct(req, res) {
 }
 
 async function UpdateProduct(req, res) {
+    const transaction = await sequelize.transaction();
+
     try {
         const { id } = req.params;
 
-        await Product.update(req.body, {
+        const product = await Product.findByPk(id);
+
+        if (!product) {
+            await transaction.rollback();
+
+            return res.status(404).json({
+                success: false,
+                message: "Product not found",
+            });
+        }
+
+        const {
+            name,
+            desc,
+            discount,
+            price,
+            offerPrice,
+            categoryId,
+            subcategoryId,
+            slug,
+            loom,
+            status,
+            isFeatured,
+            isNewArrival,
+            variants = [],
+        } = req.body;
+
+        // Get one existing variant only to preserve/delete the old image
+        const existingAttribute = await ProductAttribute.findOne({
             where: {
-                id,
+                productId: id,
             },
+            transaction,
         });
 
-        const updated = await Product.findByPk(id);
+        let imageUrl = existingAttribute?.image_url || "";
+
+        if (req.files) {
+            // Delete old image
+            if (existingAttribute?.image_url) {
+                const oldImage = path.join(
+                    __dirname,
+                    "../public",
+                    existingAttribute.image_url
+                );
+
+                if (fs.existsSync(oldImage)) {
+                    fs.unlinkSync(oldImage);
+                }
+            }
+
+            const fileName = `${Date.now()}-${req.files.originalname}`;
+
+            const uploadPath = path.join(
+                __dirname,
+                "../public/uploads",
+                fileName
+            );
+
+            fs.writeFileSync(uploadPath, req.files.buffer);
+
+            imageUrl = `/uploads/${fileName}`;
+        }
+
+        // Update product
+        await product.update(
+            {
+                name,
+                desc,
+                discount,
+                price,
+                offerPrice,
+                categoryId,
+                subcategoryId,
+                loom,
+                status,
+                slug,
+                isFeatured,
+                isNewArrival,
+            },
+            { transaction }
+        );
+
+        // Remove old variants
+        await ProductAttribute.destroy({
+            where: {
+                productId: id,
+            },
+            transaction,
+        });
+
+        // Insert new variants
+        if (Array.isArray(variants) && variants.length > 0) {
+            const attributes = variants.map((variant, index) => ({
+                productId: id,
+                sku: variant.sku || null,
+                color: variant.color || null,
+                fabric: variant.fabric || null,
+                work: variant.work || null,
+                blouseLength: variant.blouseLength || null,
+                occasion: variant.occasion || null,
+                metal: variant.metal || null,
+                purity: variant.purity || null,
+                stone: variant.stone || null,
+                weight: variant.weight || null,
+                size: variant.size || null,
+                image_url: req.files[index]
+                    ? `/uploads/${req.files[index].filename}`
+                    : null
+            }));
+
+            await ProductAttribute.bulkCreate(attributes, {
+                transaction,
+            });
+        }
+
+        await transaction.commit();
+
+        const updatedProduct = await Product.findByPk(id, {
+            include: [
+                {
+                    model: Category,
+                    as: "category",
+                },
+                {
+                    model: SubCategory,
+                    as: "subcategory",
+                },
+                {
+                    model: ProductAttribute,
+                    as: "attributes",
+                },
+            ],
+        });
 
         return res.status(200).json({
             success: true,
-            data: updated,
+            message: "Product updated successfully",
+            data: updatedProduct,
         });
+
     } catch (err) {
-        console.log(err);
+        await transaction.rollback();
+
+        console.error(err);
 
         return res.status(500).json({
             success: false,
-            message: "Update failed",
+            message: "Failed to update product",
         });
     }
 }
 
 async function DeleteProduct(req, res) {
+    const transaction = await sequelize.transaction();
+
     try {
         const { id } = req.params;
 
-        await Product.destroy({
+        const product = await Product.findByPk(id);
+
+        if (!product) {
+            await transaction.rollback();
+
+            return res.status(404).json({
+                success: false,
+                message: "Product not found",
+            });
+        }
+
+        const attributes = await ProductAttribute.findAll({
             where: {
-                id,
-            },
+                productId: id
+            }
         });
+
+        // Delete image from local storage
+        let imagePath = null;
+
+        if (attributes?.image_url) {
+            imagePath = path.join(
+                __dirname,
+                "../public",
+                attributes.image_url
+            );
+        }
+
+        await product.destroy({ transaction });
+
+        await transaction.commit();
+
+        if (imagePath && fs.existsSync(imagePath)) {
+            fs.unlinkSync(imagePath);
+        }
 
         return res.status(200).json({
             success: true,
-            message: "Product deleted",
+            message: "Product deleted successfully",
         });
     } catch (err) {
-        console.log(err);
+        await transaction.rollback();
+
+        console.error(err);
 
         return res.status(500).json({
             success: false,
-            message: "Delete failed",
+            message: "Failed to delete product",
         });
     }
 }
