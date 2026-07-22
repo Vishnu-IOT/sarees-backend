@@ -28,6 +28,16 @@ const addFullImageUrls = (products, baseUrl) => {
     });
 };
 
+// ✅ Helper: strip the baseUrl back off an image_url the frontend sent us,
+// so we always store/compare relative paths ("/uploads/xyz.jpg") internally.
+const toRelativeImageUrl = (url, baseUrl) => {
+    if (!url) return null;
+    if (baseUrl && url.startsWith(baseUrl)) {
+        return url.slice(baseUrl.length);
+    }
+    return url;
+};
+
 async function GetProducts(req, res) {
     try {
         const page = Number(req.query.page) || 1;
@@ -165,20 +175,29 @@ async function CreateProduct(req, res) {
         }
 
         if (variantsArray.length > 0) {
-            const attributes = variantsArray.map((variant, index) => {
+            // ⚠️ req.files is DENSE — it only contains variants that actually
+            // had an imageFile attached, in the order they were appended.
+            // variantsArray is the FULL list of variants (some with no image).
+            // We must not index them the same way — walk req.files with its
+            // own pointer, advancing only for variants that carried an image.
+            let fileIndex = 0;
+
+            const attributes = variantsArray.map((variant) => {
                 let variantImageUrl = null;
 
-                // If files array exists and has file for this variant
-                if (req.files && req.files[index]) {
-                    const fileName = `${Date.now()}-${index}-${req.files[index].originalname}`;
+                const hasImage = Boolean(variant.hasImage);
+                if (hasImage && req.files && req.files[fileIndex]) {
+                    const file = req.files[fileIndex];
+                    const fileName = `${Date.now()}-${fileIndex}-${file.originalname}`;
                     const uploadPath = path.join(
                         __dirname,
                         "../public/uploads",
                         fileName
                     );
 
-                    fs.writeFileSync(uploadPath, req.files[index].buffer);
+                    fs.writeFileSync(uploadPath, file.buffer);
                     variantImageUrl = `/uploads/${fileName}`;
+                    fileIndex++;
                 }
 
                 return {
@@ -290,6 +309,8 @@ async function UpdateProduct(req, res) {
             variants = [];
         }
 
+        const baseUrl = getBaseUrl(req);
+
         let mainImageUrl = product.image_url;
 
         if (req.file) {
@@ -336,8 +357,17 @@ async function UpdateProduct(req, res) {
             transaction,
         });
 
+        // ✅ Figure out which existing image_urls are being KEPT (variant has
+        // no new file, and the frontend sent back the same image_url it was
+        // given). Anything not in this set is safe to delete from disk.
+        const keptImageUrls = new Set(
+            variants
+                .filter((v) => !v.hasNewImage && v.image_url)
+                .map((v) => toRelativeImageUrl(v.image_url, baseUrl))
+        );
+
         oldAttributes.forEach((attr) => {
-            if (attr.image_url) {
+            if (attr.image_url && !keptImageUrls.has(attr.image_url)) {
                 const oldImage = path.join(__dirname, "../public", attr.image_url);
 
                 if (fs.existsSync(oldImage)) {
@@ -352,19 +382,28 @@ async function UpdateProduct(req, res) {
         });
 
         if (variants.length > 0) {
-            const attributes = variants.map((variant, index) => {
-                let variantImageUrl = null;
+            // ⚠️ Same dense-array problem as CreateProduct: req.files only
+            // contains files for variants where hasNewImage was true, in
+            // order. Walk it with its own pointer instead of variant index.
+            let fileIndex = 0;
 
-                if (req.files && req.files[index]) {
-                    const fileName = `${Date.now()}-${index}-${req.files[index].originalname}`;
+            const attributes = variants.map((variant) => {
+                // Default: keep whatever image_url the frontend already had
+                // for this variant (converted back to a relative path).
+                let variantImageUrl = toRelativeImageUrl(variant.image_url, baseUrl);
+
+                if (variant.hasNewImage && req.files && req.files[fileIndex]) {
+                    const file = req.files[fileIndex];
+                    const fileName = `${Date.now()}-${fileIndex}-${file.originalname}`;
                     const uploadPath = path.join(
                         __dirname,
                         "../public/uploads",
                         fileName
                     );
 
-                    fs.writeFileSync(uploadPath, req.files[index].buffer);
+                    fs.writeFileSync(uploadPath, file.buffer);
                     variantImageUrl = `/uploads/${fileName}`;
+                    fileIndex++;
                 }
 
                 return {
@@ -409,7 +448,6 @@ async function UpdateProduct(req, res) {
         });
 
         // ✅ Add full URLs to response
-        const baseUrl = getBaseUrl(req);
         const productWithFullUrls = addFullImageUrls([updatedProduct], baseUrl)[0];
 
         return res.status(200).json({
