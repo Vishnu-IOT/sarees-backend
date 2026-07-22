@@ -7,6 +7,27 @@ const fs = require("fs");
 const path = require("path");
 const sequelize = require("../config/mysqldb");
 
+// ✅ Get base URL from environment or construct it
+const getBaseUrl = (req) => {
+    return process.env.BASE_URL || `${req.protocol}://${req.get("host")}`;
+};
+
+// ✅ Function to add full URL to image_url
+const addFullImageUrls = (products, baseUrl) => {
+    return products.map((product) => {
+        const productData = product.toJSON ? product.toJSON() : product;
+
+        if (productData.attributes && Array.isArray(productData.attributes)) {
+            productData.attributes = productData.attributes.map((attr) => ({
+                ...attr,
+                image_url: attr.image_url ? `${baseUrl}${attr.image_url}` : null,
+            }));
+        }
+
+        return productData;
+    });
+};
+
 async function GetProducts(req, res) {
     try {
         const page = Number(req.query.page) || 1;
@@ -51,9 +72,13 @@ async function GetProducts(req, res) {
             distinct: true,
         });
 
+        // ✅ Add full URLs to responses
+        const baseUrl = getBaseUrl(req);
+        const productsWithFullUrls = addFullImageUrls(rows, baseUrl);
+
         return res.status(200).json({
             success: true,
-            products: rows,
+            products: productsWithFullUrls,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -72,7 +97,7 @@ async function CreateProduct(req, res) {
     const transaction = await sequelize.transaction();
 
     try {
-        let {
+        const {
             name,
             desc,
             discount,
@@ -88,26 +113,11 @@ async function CreateProduct(req, res) {
             variants = [],
         } = req.body;
 
-        // Parse variants if it comes as JSON string from FormData
-        if (typeof variants === "string") {
-            try {
-                variants = JSON.parse(variants);
-            } catch (e) {
-                console.error("Error parsing variants:", e);
-                variants = [];
-            }
-        }
+        let imageUrl = "";
 
-        // Ensure variants is an array
-        if (!Array.isArray(variants)) {
-            variants = [];
-        }
-
-        let mainImageUrl = "";
-
-        // Handle main product image (if single file upload)
         if (req.file) {
             const fileName = `${Date.now()}-${req.file.originalname}`;
+
             const uploadPath = path.join(
                 __dirname,
                 "../public/uploads",
@@ -115,10 +125,10 @@ async function CreateProduct(req, res) {
             );
 
             fs.writeFileSync(uploadPath, req.file.buffer);
-            mainImageUrl = `/uploads/${fileName}`;
+
+            imageUrl = `/uploads/${fileName}`;
         }
 
-        // Create product with image URL
         const product = await Product.create(
             {
                 name,
@@ -133,14 +143,29 @@ async function CreateProduct(req, res) {
                 slug,
                 isFeatured,
                 isNewArrival,
-                image_url: mainImageUrl, // Store main product image
+                image_url: imageUrl,
             },
             { transaction }
         );
 
-        // Handle variant attributes with variant images
-        if (Array.isArray(variants) && variants.length > 0) {
-            const attributes = variants.map((variant, index) => {
+        // Parse variants if it comes as JSON string from FormData
+        let variantsArray = variants;
+        if (typeof variantsArray === "string") {
+            try {
+                variantsArray = JSON.parse(variantsArray);
+            } catch (e) {
+                console.error("Error parsing variants:", e);
+                variantsArray = [];
+            }
+        }
+
+        // Ensure variants is an array
+        if (!Array.isArray(variantsArray)) {
+            variantsArray = [];
+        }
+
+        if (variantsArray.length > 0) {
+            const attributes = variantsArray.map((variant, index) => {
                 let variantImageUrl = null;
 
                 // If files array exists and has file for this variant
@@ -197,13 +222,18 @@ async function CreateProduct(req, res) {
             ],
         });
 
+        // ✅ Add full URLs to response
+        const baseUrl = getBaseUrl(req);
+        const productWithFullUrls = addFullImageUrls([createdProduct], baseUrl)[0];
+
         return res.status(201).json({
             success: true,
             message: "Product created successfully",
-            data: createdProduct,
+            data: productWithFullUrls,
         });
     } catch (err) {
         await transaction.rollback();
+
         console.error(err);
 
         return res.status(500).json({
@@ -246,7 +276,7 @@ async function UpdateProduct(req, res) {
             variants = [],
         } = req.body;
 
-        // Parse variants if it comes as JSON string from FormData
+        // Parse variants if it comes as JSON string
         if (typeof variants === "string") {
             try {
                 variants = JSON.parse(variants);
@@ -256,16 +286,13 @@ async function UpdateProduct(req, res) {
             }
         }
 
-        // Ensure variants is an array
         if (!Array.isArray(variants)) {
             variants = [];
         }
 
-        let mainImageUrl = product.image_url; // Keep existing image by default
+        let mainImageUrl = product.image_url;
 
-        // Handle main product image update
         if (req.file) {
-            // Delete old main image if exists
             if (product.image_url) {
                 const oldImage = path.join(__dirname, "../public", product.image_url);
 
@@ -285,7 +312,6 @@ async function UpdateProduct(req, res) {
             mainImageUrl = `/uploads/${fileName}`;
         }
 
-        // Update product with new image URL
         await product.update(
             {
                 name,
@@ -305,13 +331,11 @@ async function UpdateProduct(req, res) {
             { transaction }
         );
 
-        // Get old variant images for cleanup
         const oldAttributes = await ProductAttribute.findAll({
             where: { productId: id },
             transaction,
         });
 
-        // Delete old variant images
         oldAttributes.forEach((attr) => {
             if (attr.image_url) {
                 const oldImage = path.join(__dirname, "../public", attr.image_url);
@@ -322,18 +346,15 @@ async function UpdateProduct(req, res) {
             }
         });
 
-        // Remove old variants
         await ProductAttribute.destroy({
             where: { productId: id },
             transaction,
         });
 
-        // Insert new variants with images
-        if (Array.isArray(variants) && variants.length > 0) {
+        if (variants.length > 0) {
             const attributes = variants.map((variant, index) => {
                 let variantImageUrl = null;
 
-                // If files array exists and has file for this variant
                 if (req.files && req.files[index]) {
                     const fileName = `${Date.now()}-${index}-${req.files[index].originalname}`;
                     const uploadPath = path.join(
@@ -387,13 +408,18 @@ async function UpdateProduct(req, res) {
             ],
         });
 
+        // ✅ Add full URLs to response
+        const baseUrl = getBaseUrl(req);
+        const productWithFullUrls = addFullImageUrls([updatedProduct], baseUrl)[0];
+
         return res.status(200).json({
             success: true,
             message: "Product updated successfully",
-            data: updatedProduct,
+            data: productWithFullUrls,
         });
     } catch (err) {
         await transaction.rollback();
+
         console.error(err);
 
         return res.status(500).json({
@@ -420,14 +446,12 @@ async function DeleteProduct(req, res) {
             });
         }
 
-        // Get all variant attributes
         const attributes = await ProductAttribute.findAll({
             where: {
                 productId: id,
             },
         });
 
-        // Delete product
         await product.destroy({ transaction });
 
         await transaction.commit();
@@ -458,6 +482,7 @@ async function DeleteProduct(req, res) {
         });
     } catch (err) {
         await transaction.rollback();
+
         console.error(err);
 
         return res.status(500).json({
