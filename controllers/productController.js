@@ -196,7 +196,7 @@ async function CreateProduct(req, res) {
                     );
 
                     fs.writeFileSync(uploadPath, file.buffer);
-                    variantImageUrl = `/uploads/${fileName}`;
+                    variantImageUrl = `/public/uploads/${fileName}`;
                     fileIndex++;
                 }
 
@@ -330,7 +330,7 @@ async function UpdateProduct(req, res) {
             );
 
             fs.writeFileSync(uploadPath, req.file.buffer);
-            mainImageUrl = `/uploads/${fileName}`;
+            mainImageUrl = `/public/uploads/${fileName}`;
         }
 
         await product.update(
@@ -402,7 +402,7 @@ async function UpdateProduct(req, res) {
                     );
 
                     fs.writeFileSync(uploadPath, file.buffer);
-                    variantImageUrl = `/uploads/${fileName}`;
+                    variantImageUrl = `/public/uploads/${fileName}`;
                     fileIndex++;
                 }
 
