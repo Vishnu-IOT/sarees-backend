@@ -6,6 +6,7 @@ const ProductAttribute = require("../models/ProductAttributes");
 const fs = require("fs");
 const path = require("path");
 const sequelize = require("../config/mysqldb");
+const { Op } = require("sequelize");
 
 // ✅ Get base URL from environment or construct it
 const getBaseUrl = (req) => {
@@ -38,6 +39,7 @@ const toRelativeImageUrl = (url, baseUrl) => {
     return url;
 };
 
+// ✅ Get all products (existing function - now filters by collection optionally)
 async function GetProducts(req, res) {
     try {
         const page = Number(req.query.page) || 1;
@@ -49,7 +51,7 @@ async function GetProducts(req, res) {
                 {
                     model: Category,
                     as: "category",
-                    attributes: ["id", "category"],
+                    attributes: ["id", "name", "collection"],
                 },
                 {
                     model: SubCategory,
@@ -103,6 +105,141 @@ async function GetProducts(req, res) {
     }
 }
 
+// ✅ NEW: Get only SAREE products
+async function GetSarees(req, res) {
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 8;
+        const offset = (page - 1) * limit;
+
+        const { count, rows } = await Product.findAndCountAll({
+            where: {
+                collection: "SAREE",
+                status: "active",
+            },
+            include: [
+                {
+                    model: Category,
+                    as: "category",
+                    where: { collection: "SAREE" },
+                    attributes: ["id", "name", "collection"],
+                },
+                {
+                    model: SubCategory,
+                    as: "subcategory",
+                    attributes: ["id", "name"],
+                },
+                {
+                    model: ProductAttribute,
+                    as: "attributes",
+                    attributes: [
+                        "id",
+                        "color",
+                        "image_url",
+                        "sku",
+                        "fabric",
+                        "work",
+                        "blouseLength",
+                        "occasion",
+                    ],
+                },
+            ],
+            order: [["createdAt", "DESC"]],
+            limit,
+            offset,
+            distinct: true,
+        });
+
+        // ✅ Add full URLs to responses
+        const baseUrl = getBaseUrl(req);
+        const productsWithFullUrls = addFullImageUrls(rows, baseUrl);
+
+        return res.status(200).json({
+            success: true,
+            collection: "SAREE",
+            products: productsWithFullUrls,
+            currentPage: page,
+            totalPages: Math.ceil(count / limit),
+            total: count,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch sarees",
+        });
+    }
+}
+
+// ✅ NEW: Get only JEWEL products
+async function GetJewels(req, res) {
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 8;
+        const offset = (page - 1) * limit;
+
+        const { count, rows } = await Product.findAndCountAll({
+            where: {
+                collection: "JEWEL",
+                status: "active",
+            },
+            include: [
+                {
+                    model: Category,
+                    as: "category",
+                    where: { collection: "JEWEL" },
+                    attributes: ["id", "name", "collection"],
+                },
+                {
+                    model: SubCategory,
+                    as: "subcategory",
+                    attributes: ["id", "name"],
+                },
+                {
+                    model: ProductAttribute,
+                    as: "attributes",
+                    attributes: [
+                        "id",
+                        "color",
+                        "image_url",
+                        "sku",
+                        "metal",
+                        "purity",
+                        "stone",
+                        "weight",
+                        "size",
+                    ],
+                },
+            ],
+            order: [["createdAt", "DESC"]],
+            limit,
+            offset,
+            distinct: true,
+        });
+
+        // ✅ Add full URLs to responses
+        const baseUrl = getBaseUrl(req);
+        const productsWithFullUrls = addFullImageUrls(rows, baseUrl);
+
+        return res.status(200).json({
+            success: true,
+            collection: "JEWEL",
+            products: productsWithFullUrls,
+            currentPage: page,
+            totalPages: Math.ceil(count / limit),
+            total: count,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch jewels",
+        });
+    }
+}
+
 async function CreateProduct(req, res) {
     const transaction = await sequelize.transaction();
 
@@ -116,12 +253,22 @@ async function CreateProduct(req, res) {
             categoryId,
             subcategoryId,
             slug,
+            collection,
             loom,
             status,
             isFeatured,
             isNewArrival,
             variants = [],
         } = req.body;
+
+        // Validate collection
+        if (!collection || !["SAREE", "JEWEL"].includes(collection)) {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Collection must be either 'SAREE' or 'JEWEL'",
+            });
+        }
 
         let imageUrl = "";
 
@@ -148,6 +295,7 @@ async function CreateProduct(req, res) {
                 offerPrice,
                 categoryId,
                 subcategoryId,
+                collection,
                 loom,
                 status,
                 slug,
@@ -175,11 +323,6 @@ async function CreateProduct(req, res) {
         }
 
         if (variantsArray.length > 0) {
-            // ⚠️ req.files is DENSE — it only contains variants that actually
-            // had an imageFile attached, in the order they were appended.
-            // variantsArray is the FULL list of variants (some with no image).
-            // We must not index them the same way — walk req.files with its
-            // own pointer, advancing only for variants that carried an image.
             let fileIndex = 0;
 
             const attributes = variantsArray.map((variant) => {
@@ -267,8 +410,24 @@ async function UpdateProduct(req, res) {
 
     try {
         const { id } = req.params;
+        const {
+            name,
+            desc,
+            discount,
+            price,
+            offerPrice,
+            categoryId,
+            subcategoryId,
+            slug,
+            collection,
+            loom,
+            status,
+            isFeatured,
+            isNewArrival,
+            variants = "[]",
+        } = req.body;
 
-        const product = await Product.findByPk(id);
+        const product = await Product.findByPk(id, { transaction });
 
         if (!product) {
             await transaction.rollback();
@@ -279,34 +438,29 @@ async function UpdateProduct(req, res) {
             });
         }
 
-        let {
-            name,
-            desc,
-            discount,
-            price,
-            offerPrice,
-            categoryId,
-            subcategoryId,
-            slug,
-            loom,
-            status,
-            isFeatured,
-            isNewArrival,
-            variants = [],
-        } = req.body;
-
-        // Parse variants if it comes as JSON string
-        if (typeof variants === "string") {
-            try {
-                variants = JSON.parse(variants);
-            } catch (e) {
-                console.error("Error parsing variants:", e);
-                variants = [];
-            }
+        // Validate collection if provided
+        if (collection && !["SAREE", "JEWEL"].includes(collection)) {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Collection must be either 'SAREE' or 'JEWEL'",
+            });
         }
 
-        if (!Array.isArray(variants)) {
-            variants = [];
+        let variantsObj;
+        if (typeof variants === "string") {
+            try {
+                variantsObj = JSON.parse(variants);
+            } catch (e) {
+                console.error("Error parsing variants:", e);
+                variantsObj = [];
+            }
+        } else {
+            variantsObj = variants;
+        }
+
+        if (!Array.isArray(variantsObj)) {
+            variantsObj = [];
         }
 
         const baseUrl = getBaseUrl(req);
@@ -346,6 +500,7 @@ async function UpdateProduct(req, res) {
                 offerPrice,
                 categoryId,
                 subcategoryId,
+                collection: collection || product.collection,
                 loom,
                 status,
                 slug,
@@ -361,11 +516,8 @@ async function UpdateProduct(req, res) {
             transaction,
         });
 
-        // ✅ Figure out which existing image_urls are being KEPT (variant has
-        // no new file, and the frontend sent back the same image_url it was
-        // given). Anything not in this set is safe to delete from disk.
         const keptImageUrls = new Set(
-            variants
+            variantsObj
                 .filter((v) => !v.hasNewImage && v.image_url)
                 .map((v) => toRelativeImageUrl(v.image_url, baseUrl))
         );
@@ -389,15 +541,10 @@ async function UpdateProduct(req, res) {
             transaction,
         });
 
-        if (variants.length > 0) {
-            // ⚠️ Same dense-array problem as CreateProduct: req.files only
-            // contains files for variants where hasNewImage was true, in
-            // order. Walk it with its own pointer instead of variant index.
+        if (variantsObj.length > 0) {
             let fileIndex = 0;
 
-            const attributes = variants.map((variant) => {
-                // Default: keep whatever image_url the frontend already had
-                // for this variant (converted back to a relative path).
+            const attributes = variantsObj.map((variant) => {
                 let variantImageUrl = toRelativeImageUrl(variant.image_url, baseUrl);
 
                 if (variant.hasNewImage && req.files && req.files[fileIndex]) {
@@ -548,6 +695,8 @@ async function DeleteProduct(req, res) {
 
 module.exports = {
     GetProducts,
+    GetSarees,
+    GetJewels,
     CreateProduct,
     UpdateProduct,
     DeleteProduct,

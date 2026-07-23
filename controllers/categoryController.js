@@ -3,7 +3,7 @@ const router = express.Router();
 const Category = require("../models/Category");
 const SubCategory = require("../models/SubCategory");
 
-// GET - Fetch all categories
+// ✅ GET - Fetch all categories
 async function GetCategories(req, res) {
     try {
         const categories = await Category.findAll({
@@ -24,26 +24,77 @@ async function GetCategories(req, res) {
     }
 }
 
-// POST - Add category
+// ✅ NEW: GET - Fetch categories by collection (SAREE or JEWEL)
+async function GetCategoriesByCollection(req, res) {
+    try {
+        const { collection } = req.params;
+
+        if (!collection || !["SAREE", "JEWEL"].includes(collection.toUpperCase())) {
+            return res.status(400).json({
+                success: false,
+                message: "Collection must be either 'SAREE' or 'JEWEL'",
+            });
+        }
+
+        const categories = await Category.findAll({
+            where: {
+                collection: collection.toUpperCase(),
+            },
+            order: [["createdAt", "DESC"]],
+        });
+
+        return res.status(200).json({
+            success: true,
+            collection: collection.toUpperCase(),
+            data: categories,
+            count: categories.length,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch categories",
+        });
+    }
+}
+
+// ✅ POST - Add category
 async function CreateCategory(req, res) {
     try {
-        const { category } = req.body;
+        const { name, collection } = req.body;
+
+        if (!name) {
+            return res.status(400).json({
+                success: false,
+                message: "Category name is required",
+            });
+        }
+
+        if (!collection || !["SAREE", "JEWEL"].includes(collection.toUpperCase())) {
+            return res.status(400).json({
+                success: false,
+                message: "Collection must be either 'SAREE' or 'JEWEL'",
+            });
+        }
 
         const existingCategory = await Category.findOne({
             where: {
-                category,
+                name,
+                collection: collection.toUpperCase(),
             },
         });
 
         if (existingCategory) {
             return res.status(409).json({
                 success: false,
-                message: "Category already exists",
+                message: "Category already exists in this collection",
             });
         }
 
         const newCategory = await Category.create({
-            category,
+            name,
+            collection: collection.toUpperCase(),
         });
 
         return res.status(201).json({
@@ -61,7 +112,7 @@ async function CreateCategory(req, res) {
     }
 }
 
-// DELETE - Delete category
+// ✅ DELETE - Delete category
 async function DeleteCategory(req, res) {
     try {
         const { id } = req.params;
@@ -93,7 +144,7 @@ async function DeleteCategory(req, res) {
     }
 }
 
-// GET - Fetch all subcategories
+// ✅ GET - Fetch all subcategories
 async function GetSubCategories(req, res) {
     try {
         const subcategories = await SubCategory.findAll({
@@ -101,7 +152,7 @@ async function GetSubCategories(req, res) {
                 {
                     model: Category,
                     as: "category",
-                    attributes: ["id", "category"],
+                    attributes: ["id", "name", "collection"],
                 },
             ],
             order: [["createdAt", "DESC"]],
@@ -121,10 +172,68 @@ async function GetSubCategories(req, res) {
     }
 }
 
-// POST - Create subcategory
+// ✅ NEW: GET - Fetch subcategories by collection
+async function GetSubCategoriesByCollection(req, res) {
+    try {
+        const { collection } = req.params;
+
+        if (!collection || !["SAREE", "JEWEL"].includes(collection.toUpperCase())) {
+            return res.status(400).json({
+                success: false,
+                message: "Collection must be either 'SAREE' or 'JEWEL'",
+            });
+        }
+
+        const subcategories = await SubCategory.findAll({
+            include: [
+                {
+                    model: Category,
+                    as: "category",
+                    where: {
+                        collection: collection.toUpperCase(),
+                    },
+                    attributes: ["id", "name", "collection"],
+                },
+            ],
+            order: [["createdAt", "DESC"]],
+        });
+
+        return res.status(200).json({
+            success: true,
+            collection: collection.toUpperCase(),
+            data: subcategories,
+            count: subcategories.length,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch subcategories",
+        });
+    }
+}
+
+// ✅ POST - Create subcategory
 async function CreateSubCategory(req, res) {
     try {
         const { name, categoryId, image, status } = req.body;
+
+        if (!name || !categoryId) {
+            return res.status(400).json({
+                success: false,
+                message: "Subcategory name and categoryId are required",
+            });
+        }
+
+        // Verify category exists
+        const category = await Category.findByPk(categoryId);
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: "Category not found",
+            });
+        }
 
         const existing = await SubCategory.findOne({
             where: {
@@ -162,7 +271,7 @@ async function CreateSubCategory(req, res) {
     }
 }
 
-// PUT - Update subcategory
+// ✅ PUT - Update subcategory
 async function UpdateSubCategory(req, res) {
     try {
         const { id } = req.params;
@@ -177,11 +286,22 @@ async function UpdateSubCategory(req, res) {
             });
         }
 
+        // Verify new category exists if provided
+        if (categoryId) {
+            const category = await Category.findByPk(categoryId);
+            if (!category) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Category not found",
+                });
+            }
+        }
+
         await subcategory.update({
-            name,
-            categoryId,
-            image,
-            status,
+            name: name || subcategory.name,
+            categoryId: categoryId || subcategory.categoryId,
+            image: image || subcategory.image,
+            status: status !== undefined ? status : subcategory.status,
         });
 
         return res.status(200).json({
@@ -199,7 +319,7 @@ async function UpdateSubCategory(req, res) {
     }
 }
 
-// DELETE - Delete subcategory
+// ✅ DELETE - Delete subcategory
 async function DeleteSubCategory(req, res) {
     try {
         const { id } = req.params;
@@ -233,9 +353,11 @@ async function DeleteSubCategory(req, res) {
 
 module.exports = {
     GetCategories,
+    GetCategoriesByCollection,
     CreateCategory,
     DeleteCategory,
     GetSubCategories,
+    GetSubCategoriesByCollection,
     CreateSubCategory,
     UpdateSubCategory,
     DeleteSubCategory,

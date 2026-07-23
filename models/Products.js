@@ -2,6 +2,7 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/mysqldb");
 const Category = require("./Category");
 const SubCategory = require("./SubCategory");
+const User = require("./User");
 
 const Product = sequelize.define(
     "Product",
@@ -43,6 +44,13 @@ const Product = sequelize.define(
             allowNull: false,
         },
 
+        // NEW: Collection enum to differentiate between SAREE and JEWEL
+        collection: {
+            type: DataTypes.ENUM("SAREE", "JEWEL"),
+            allowNull: false,
+            defaultValue: "SAREE",
+        },
+
         loom: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,
@@ -70,6 +78,11 @@ const Product = sequelize.define(
         isNewArrival: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,
+        },
+
+        image_url: {
+            type: DataTypes.STRING,
+            allowNull: true,
         },
     },
     {

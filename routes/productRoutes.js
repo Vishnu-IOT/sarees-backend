@@ -4,17 +4,23 @@ const upload = require("../middlewares/upload");
 
 const {
     GetProducts,
+    GetSarees,
+    GetJewels,
     CreateProduct,
     UpdateProduct,
     DeleteProduct,
 } = require("../controllers/productController");
 
-// GET all products
+// ✅ GET all products (mixed)
 router.get("/get-products", GetProducts);
 
+// ✅ NEW: GET all SAREE products
+router.get("/get-sarees", GetSarees);
+
+// ✅ NEW: GET all JEWEL products
+router.get("/get-jewels", GetJewels);
+
 // POST - Create product with variant images
-// ✅ CHANGED: upload.single("image") → upload.array("variantImages", 20)
-// This accepts up to 20 variant images with field name "variantImages"
 router.post(
     "/create-product",
     upload.array("variantImages", 20),
@@ -22,7 +28,6 @@ router.post(
 );
 
 // PUT - Update product with variant images
-// ✅ CHANGED: POST → PUT and added multer for variant images
 router.post(
     "/update-product/:id",
     upload.array("variantImages", 20),

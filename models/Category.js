@@ -10,10 +10,16 @@ const Category = sequelize.define(
             autoIncrement: true,
         },
 
-        category: {
+        name: {
             type: DataTypes.STRING,
             allowNull: false,
-            unique: true,
+        },
+
+        // NEW: Collection enum to differentiate between SAREE and JEWEL collections
+        collection: {
+            type: DataTypes.ENUM("SAREE", "JEWEL"),
+            allowNull: false,
+            defaultValue: "SAREE",
         },
     },
     {

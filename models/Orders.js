@@ -1,9 +1,26 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/mysqldb");
+const User = require("./User");
 
 const Order = sequelize.define(
     "Order",
     {
+        id: {
+            type: DataTypes.INTEGER,
+            primaryKey: true,
+            autoIncrement: true,
+        },
+
+        // NEW: Add userId to link orders to users
+        userId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            references: {
+                model: "users",
+                key: "id",
+            },
+        },
+
         orderNumber: {
             type: DataTypes.STRING,
             unique: true,
@@ -72,7 +89,20 @@ const Order = sequelize.define(
     },
     {
         tableName: "orders",
+        timestamps: true,
     }
 );
+
+// Association with User
+Order.belongsTo(User, {
+    foreignKey: "userId",
+    as: "user",
+    allowNull: true,
+});
+
+User.hasMany(Order, {
+    foreignKey: "userId",
+    as: "orders",
+});
 
 module.exports = Order;

@@ -4,7 +4,9 @@ const Order = require("../models/Orders");
 const OrderItem = require("../models/OrderItems");
 const Product = require("../models/Products");
 const ProductAttribute = require("../models/ProductAttributes");
+const User = require("../models/User");
 
+// ✅ ADMIN FUNCTION: Get all orders (existing)
 async function GetOrders(req, res) {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -45,6 +47,7 @@ async function GetOrders(req, res) {
             where,
             attributes: [
                 "id",
+                "userId",
                 "orderNumber",
                 "customerName",
                 "customerPhone",
@@ -97,13 +100,141 @@ async function GetOrders(req, res) {
             message: "Failed to fetch orders.",
         });
     }
-};
+}
+
+// ✅ NEW: Get orders for a specific user
+async function GetUserOrders(req, res) {
+    try {
+        const { userId } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        const status = req.query.status || "";
+        const sort = req.query.sort === "ASC" ? "ASC" : "DESC";
+
+        // Build where clause
+        const where = {
+            userId: parseInt(userId),
+        };
+
+        if (status) {
+            where.status = status;
+        }
+
+        const { count, rows } = await Order.findAndCountAll({
+            where,
+            include: [
+                {
+                    model: OrderItem,
+                    as: "items",
+                    include: [
+                        {
+                            model: Product,
+                            as: "product",
+                            attributes: ["id", "name", "collection"],
+                        },
+                    ],
+                },
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["id", "name", "email"],
+                },
+            ],
+            order: [["createdAt", sort]],
+            limit,
+            offset,
+            distinct: true,
+        });
+
+        if (rows.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: "No orders found for this user",
+                userId: parseInt(userId),
+                orders: [],
+                currentPage: page,
+                totalPages: 0,
+                total: 0,
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            userId: parseInt(userId),
+            orders: rows,
+            currentPage: page,
+            totalPages: Math.ceil(count / limit),
+            total: count,
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch user orders.",
+            error: error.message,
+        });
+    }
+}
+
+// ✅ NEW: Get single order details with items
+async function GetOrderById(req, res) {
+    try {
+        const { orderId } = req.params;
+
+        const order = await Order.findByPk(orderId, {
+            include: [
+                {
+                    model: OrderItem,
+                    as: "items",
+                    include: [
+                        {
+                            model: Product,
+                            as: "product",
+                            attributes: ["id", "name", "collection", "price", "offerPrice"],
+                        },
+                    ],
+                },
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["id", "name", "email", "phone"],
+                },
+            ],
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found.",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: order,
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch order details.",
+            error: error.message,
+        });
+    }
+}
 
 async function CreateOrder(req, res) {
     const transaction = await sequelize.transaction();
 
     try {
         const {
+            userId,
             customerName,
             customerPhone,
             customerEmail,
@@ -132,7 +263,6 @@ async function CreateOrder(req, res) {
         }
 
         // Order number: timestamp + short random suffix to avoid collisions
-        // if two orders land in the same millisecond.
         const orderNumber = `ORD${Date.now()}${Math.floor(Math.random() * 900 + 100)}`;
 
         let subtotal = 0;
@@ -175,9 +305,6 @@ async function CreateOrder(req, res) {
                 });
             }
 
-            // ✅ product.attributes is an ARRAY of variants (color/sku/image
-            // per option) — we need to pick the specific one the customer
-            // chose via item.attributeId, not the array itself.
             const variants = product.attributes || [];
             let selectedAttribute = null;
 
@@ -194,11 +321,8 @@ async function CreateOrder(req, res) {
                     });
                 }
             } else if (variants.length === 1) {
-                // Only one variant exists — safe to default to it.
                 selectedAttribute = variants[0];
             } else if (variants.length > 1) {
-                // Multiple variants exist and none was specified — don't
-                // silently guess which one the customer meant.
                 await transaction.rollback();
                 return res.status(400).json({
                     success: false,
@@ -218,6 +342,7 @@ async function CreateOrder(req, res) {
             orderItems.push({
                 productId: product.id,
                 productName: product.name,
+                collection: product.collection,
                 sku: selectedAttribute?.sku || null,
                 image_url: selectedAttribute?.image_url || null,
                 color: selectedAttribute?.color || null,
@@ -232,6 +357,7 @@ async function CreateOrder(req, res) {
 
         const order = await Order.create(
             {
+                userId: userId || null,
                 orderNumber,
                 customerName,
                 customerPhone,
@@ -267,6 +393,11 @@ async function CreateOrder(req, res) {
                     model: OrderItem,
                     as: "items",
                 },
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["id", "name", "email"],
+                },
             ],
         });
 
@@ -283,9 +414,10 @@ async function CreateOrder(req, res) {
         return res.status(500).json({
             success: false,
             message: "Failed to create order.",
+            error: error.message,
         });
     }
-};
+}
 
 async function UpdateOrderStatus(req, res) {
     try {
@@ -336,6 +468,12 @@ async function UpdateOrderStatus(req, res) {
             message: "Failed to update order status.",
         });
     }
-};
+}
 
-module.exports = { CreateOrder, GetOrders, UpdateOrderStatus }
+module.exports = {
+    CreateOrder,
+    GetOrders,
+    GetUserOrders,
+    GetOrderById,
+    UpdateOrderStatus,
+};
