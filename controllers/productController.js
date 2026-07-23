@@ -136,7 +136,7 @@ async function CreateProduct(req, res) {
 
             fs.writeFileSync(uploadPath, req.file.buffer);
 
-            imageUrl = `/uploads/${fileName}`;
+            imageUrl = `/public/uploads/${fileName}`;
         }
 
         const product = await Product.create(
