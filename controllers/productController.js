@@ -136,7 +136,7 @@ async function CreateProduct(req, res) {
 
             fs.writeFileSync(uploadPath, req.file.buffer);
 
-            imageUrl = `/public/uploads/${fileName}`;
+            imageUrl = `/uploads/${fileName}`;
         }
 
         const product = await Product.create(
@@ -196,7 +196,7 @@ async function CreateProduct(req, res) {
                     );
 
                     fs.writeFileSync(uploadPath, file.buffer);
-                    variantImageUrl = `/public/uploads/${fileName}`;
+                    variantImageUrl = `/uploads/${fileName}`;
                     fileIndex++;
                 }
 
@@ -315,7 +315,11 @@ async function UpdateProduct(req, res) {
 
         if (req.file) {
             if (product.image_url) {
-                const oldImage = path.join(__dirname, "../public", product.image_url);
+                const oldImage = path.join(
+                    __dirname,
+                    "../public",
+                    product.image_url.replace(/^\/+/, "")
+                );
 
                 if (fs.existsSync(oldImage)) {
                     fs.unlinkSync(oldImage);
@@ -330,7 +334,7 @@ async function UpdateProduct(req, res) {
             );
 
             fs.writeFileSync(uploadPath, req.file.buffer);
-            mainImageUrl = `/public/uploads/${fileName}`;
+            mainImageUrl = `/uploads/${fileName}`;
         }
 
         await product.update(
@@ -368,7 +372,11 @@ async function UpdateProduct(req, res) {
 
         oldAttributes.forEach((attr) => {
             if (attr.image_url && !keptImageUrls.has(attr.image_url)) {
-                const oldImage = path.join(__dirname, "../public", attr.image_url);
+                const oldImage = path.join(
+                    __dirname,
+                    "../public",
+                    attr.image_url.replace(/^\/+/, "")
+                );
 
                 if (fs.existsSync(oldImage)) {
                     fs.unlinkSync(oldImage);
@@ -402,7 +410,7 @@ async function UpdateProduct(req, res) {
                     );
 
                     fs.writeFileSync(uploadPath, file.buffer);
-                    variantImageUrl = `/public/uploads/${fileName}`;
+                    variantImageUrl = `/uploads/${fileName}`;
                     fileIndex++;
                 }
 
@@ -496,7 +504,11 @@ async function DeleteProduct(req, res) {
 
         // Delete main product image
         if (product.image_url) {
-            const imagePath = path.join(__dirname, "../public", product.image_url);
+            const imagePath = path.join(
+                __dirname,
+                "../public",
+                product.image_url.replace(/^\/+/, "")
+            );
 
             if (fs.existsSync(imagePath)) {
                 fs.unlinkSync(imagePath);
@@ -506,7 +518,11 @@ async function DeleteProduct(req, res) {
         // Delete all variant images
         attributes.forEach((attr) => {
             if (attr.image_url) {
-                const imagePath = path.join(__dirname, "../public", attr.image_url);
+                const imagePath = path.join(
+                    __dirname,
+                    "../public",
+                    attr.image_url.replace(/^\/+/, "")
+                );
 
                 if (fs.existsSync(imagePath)) {
                     fs.unlinkSync(imagePath);
