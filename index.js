@@ -8,6 +8,7 @@ const loginRoutes = require("./routes/authRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const productRoutes = require("./routes/productRoutes");
 const ordersRoutes = require("./routes/ordersRoutes");
+const userRoutes = require("./routes/userRoutes");
 const sequelize = require("./config/mysqldb");
 
 const app = express();
@@ -48,6 +49,7 @@ app.use("/new", loginRoutes);
 app.use("/category", categoryRoutes);
 app.use("/products", productRoutes);
 app.use("/orders", ordersRoutes);
+app.use("/users", userRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
@@ -110,9 +112,15 @@ sequelize
     .authenticate()
     .then(() => {
         console.log("✅ Database connection established");
+        // sync() without alter — only creates NEW tables, never alters existing ones.
+        // Use migrations (Sequelize CLI) if you need to change existing table structure.
+        return sequelize.sync();
+    })
+    .then(() => {
+        console.log("✅ Database synced successfully");
     })
     .catch((err) => {
-        console.error("❌ Database connection failed:", err.message);
+        console.error("❌ Database sync or connection failed:", err.message);
     });
 
 app.listen(port, () => {

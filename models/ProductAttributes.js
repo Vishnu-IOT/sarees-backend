@@ -84,12 +84,20 @@ const ProductAttribute = sequelize.define(
 );
 
 Product.hasMany(ProductAttribute, {
-    foreignKey: "productId",
+    foreignKey: {
+        name: "productId",
+        allowNull: false,
+    },
+    onDelete: "CASCADE",
     as: "attributes",
 });
 
 ProductAttribute.belongsTo(Product, {
-    foreignKey: "productId",
+    foreignKey: {
+        name: "productId",
+        allowNull: false,
+    },
+    onDelete: "CASCADE",
     as: "product",
 });
 

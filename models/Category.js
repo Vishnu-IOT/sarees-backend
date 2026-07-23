@@ -15,11 +15,20 @@ const Category = sequelize.define(
             allowNull: false,
         },
 
-        // NEW: Collection enum to differentiate between SAREE and JEWEL collections
         collection: {
-            type: DataTypes.ENUM("SAREE", "JEWEL"),
+            type: DataTypes.STRING,
             allowNull: false,
             defaultValue: "SAREE",
+        },
+
+        category: {
+            type: DataTypes.VIRTUAL,
+            get() {
+                return this.getDataValue("name");
+            },
+            set(value) {
+                this.setDataValue("name", value);
+            },
         },
     },
     {

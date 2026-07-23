@@ -38,6 +38,18 @@ const User = sequelize.define(
             type: DataTypes.STRING,
             allowNull: false,
         },
+
+        role: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: "Admin",
+        },
+
+        status: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: "Active",
+        },
     },
     {
         tableName: "users", // Use "users" if your migration creates a lowercase table

@@ -18,6 +18,11 @@ const addFullImageUrls = (products, baseUrl) => {
     return products.map((product) => {
         const productData = product.toJSON ? product.toJSON() : product;
 
+        // Prefix the main product cover image
+        if (productData.image_url && !productData.image_url.startsWith("http")) {
+            productData.image_url = `${baseUrl}${productData.image_url}`;
+        }
+
         if (productData.attributes && Array.isArray(productData.attributes)) {
             productData.attributes = productData.attributes.map((attr) => ({
                 ...attr,
@@ -240,6 +245,59 @@ async function GetJewels(req, res) {
     }
 }
 
+// ✅ NEW: Get all LOOM products (products tagged with loom: true)
+async function GetLoomProducts(req, res) {
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 50;
+        const offset = (page - 1) * limit;
+
+        const { count, rows } = await Product.findAndCountAll({
+            where: {
+                loom: true,
+            },
+            include: [
+                {
+                    model: Category,
+                    as: "category",
+                    attributes: ["id", "name", "collection"],
+                },
+                {
+                    model: SubCategory,
+                    as: "subcategory",
+                    attributes: ["id", "name"],
+                },
+                {
+                    model: ProductAttribute,
+                    as: "attributes",
+                },
+            ],
+            order: [["createdAt", "DESC"]],
+            limit,
+            offset,
+            distinct: true,
+        });
+
+        const baseUrl = getBaseUrl(req);
+        const productsWithFullUrls = addFullImageUrls(rows, baseUrl);
+
+        return res.status(200).json({
+            success: true,
+            products: productsWithFullUrls,
+            currentPage: page,
+            totalPages: Math.ceil(count / limit),
+            total: count,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch loom products",
+        });
+    }
+}
+
 async function CreateProduct(req, res) {
     const transaction = await sequelize.transaction();
 
@@ -261,28 +319,18 @@ async function CreateProduct(req, res) {
             variants = [],
         } = req.body;
 
-        // Validate collection
-        if (!collection || !["SAREE", "JEWEL"].includes(collection)) {
-            await transaction.rollback();
-            return res.status(400).json({
-                success: false,
-                message: "Collection must be either 'SAREE' or 'JEWEL'",
-            });
-        }
+        const finalCollection = (collection && ["SAREE", "JEWEL"].includes(collection.toUpperCase()))
+            ? collection.toUpperCase()
+            : "SAREE";
 
         let imageUrl = "";
 
-        if (req.file) {
-            const fileName = `${Date.now()}-${req.file.originalname}`;
-
-            const uploadPath = path.join(
-                __dirname,
-                "../public/uploads",
-                fileName
-            );
-
-            fs.writeFileSync(uploadPath, req.file.buffer);
-
+        // Main product cover image — sent as field name "mainImage"
+        const mainImageFile = req.files?.mainImage?.[0];
+        if (mainImageFile) {
+            const fileName = `${Date.now()}-${mainImageFile.originalname}`;
+            const uploadPath = path.join(__dirname, "../public/uploads", fileName);
+            fs.writeFileSync(uploadPath, mainImageFile.buffer);
             imageUrl = `/uploads/${fileName}`;
         }
 
@@ -295,7 +343,7 @@ async function CreateProduct(req, res) {
                 offerPrice,
                 categoryId,
                 subcategoryId,
-                collection,
+                collection: finalCollection,
                 loom,
                 status,
                 slug,
@@ -325,20 +373,18 @@ async function CreateProduct(req, res) {
         if (variantsArray.length > 0) {
             let fileIndex = 0;
 
+            // Variant images are under req.files.variantImages
+            const variantFiles = req.files?.variantImages || [];
+
             const attributes = variantsArray.map((variant) => {
                 let variantImageUrl = null;
 
                 const hasImage = Boolean(variant.hasImage);
-                if (hasImage && req.files && req.files[fileIndex]) {
-                    const file = req.files[fileIndex];
-                    const fileName = `${Date.now()}-${fileIndex}-${file.originalname}`;
-                    const uploadPath = path.join(
-                        __dirname,
-                        "../public/uploads",
-                        fileName
-                    );
-
-                    fs.writeFileSync(uploadPath, file.buffer);
+                if (hasImage && variantFiles[fileIndex]) {
+                    const variantFile = variantFiles[fileIndex];
+                    const fileName = `${Date.now()}-${variantFile.originalname}`;
+                    const uploadPath = path.join(__dirname, "../public/uploads", fileName);
+                    fs.writeFileSync(uploadPath, variantFile.buffer);
                     variantImageUrl = `/uploads/${fileName}`;
                     fileIndex++;
                 }
@@ -467,27 +513,24 @@ async function UpdateProduct(req, res) {
 
         let mainImageUrl = product.image_url;
 
-        if (req.file) {
-            if (product.image_url) {
+        // Main product cover image — sent as field name "mainImage"
+        const mainImageFile = req.files?.mainImage?.[0];
+        if (mainImageFile) {
+            // Delete old main image file if it exists
+            if (product.image_url && !product.image_url.startsWith("http")) {
                 const oldImage = path.join(
                     __dirname,
                     "../public",
                     product.image_url.replace(/^\/+/, "")
                 );
-
                 if (fs.existsSync(oldImage)) {
                     fs.unlinkSync(oldImage);
                 }
             }
 
-            const fileName = `${Date.now()}-${req.file.originalname}`;
-            const uploadPath = path.join(
-                __dirname,
-                "../public/uploads",
-                fileName
-            );
-
-            fs.writeFileSync(uploadPath, req.file.buffer);
+            const fileName = `${Date.now()}-${mainImageFile.originalname}`;
+            const uploadPath = path.join(__dirname, "../public/uploads", fileName);
+            fs.writeFileSync(uploadPath, mainImageFile.buffer);
             mainImageUrl = `/uploads/${fileName}`;
         }
 
@@ -544,11 +587,14 @@ async function UpdateProduct(req, res) {
         if (variantsObj.length > 0) {
             let fileIndex = 0;
 
+            // Variant images are under req.files.variantImages
+            const variantFiles = req.files?.variantImages || [];
+
             const attributes = variantsObj.map((variant) => {
                 let variantImageUrl = toRelativeImageUrl(variant.image_url, baseUrl);
 
-                if (variant.hasNewImage && req.files && req.files[fileIndex]) {
-                    const file = req.files[fileIndex];
+                if (variant.hasNewImage && variantFiles[fileIndex]) {
+                    const file = variantFiles[fileIndex];
                     const fileName = `${Date.now()}-${fileIndex}-${file.originalname}`;
                     const uploadPath = path.join(
                         __dirname,
@@ -697,6 +743,7 @@ module.exports = {
     GetProducts,
     GetSarees,
     GetJewels,
+    GetLoomProducts,
     CreateProduct,
     UpdateProduct,
     DeleteProduct,

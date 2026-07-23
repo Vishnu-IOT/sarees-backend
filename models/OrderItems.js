@@ -36,22 +36,38 @@ const OrderItem = sequelize.define(
 );
 
 Order.hasMany(OrderItem, {
-    foreignKey: "orderId",
+    foreignKey: {
+        name: "orderId",
+        allowNull: false,
+    },
+    onDelete: "CASCADE",
     as: "items",
 });
 
 OrderItem.belongsTo(Order, {
-    foreignKey: "orderId",
+    foreignKey: {
+        name: "orderId",
+        allowNull: false,
+    },
+    onDelete: "CASCADE",
     as: "order",
 });
 
 Product.hasMany(OrderItem, {
-    foreignKey: "productId",
+    foreignKey: {
+        name: "productId",
+        allowNull: false,
+    },
+    onDelete: "CASCADE",
     as: "orderItems",
 });
 
 OrderItem.belongsTo(Product, {
-    foreignKey: "productId",
+    foreignKey: {
+        name: "productId",
+        allowNull: false,
+    },
+    onDelete: "CASCADE",
     as: "product",
 });
 

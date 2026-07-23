@@ -6,6 +6,7 @@ const {
     GetProducts,
     GetSarees,
     GetJewels,
+    GetLoomProducts,
     CreateProduct,
     UpdateProduct,
     DeleteProduct,
@@ -20,17 +21,26 @@ router.get("/get-sarees", GetSarees);
 // ✅ NEW: GET all JEWEL products
 router.get("/get-jewels", GetJewels);
 
-// POST - Create product with variant images
+// ✅ NEW: GET all LOOM products
+router.get("/get-looms", GetLoomProducts);
+
+// POST - Create product with main image + variant images
 router.post(
     "/create-product",
-    upload.array("variantImages", 20),
+    upload.fields([
+        { name: "mainImage", maxCount: 1 },
+        { name: "variantImages", maxCount: 20 },
+    ]),
     CreateProduct
 );
 
-// PUT - Update product with variant images
+// PUT - Update product with main image + variant images
 router.post(
     "/update-product/:id",
-    upload.array("variantImages", 20),
+    upload.fields([
+        { name: "mainImage", maxCount: 1 },
+        { name: "variantImages", maxCount: 20 },
+    ]),
     UpdateProduct
 );
 
