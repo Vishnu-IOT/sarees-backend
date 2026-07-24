@@ -5,6 +5,7 @@ const OrderItem = require("../models/OrderItems");
 const Product = require("../models/Products");
 const ProductAttribute = require("../models/ProductAttributes");
 const User = require("../models/User");
+const Customer = require("../models/Customer");
 
 // ✅ ADMIN FUNCTION: Get all orders (existing)
 async function GetOrders(req, res) {
@@ -31,12 +32,12 @@ async function GetOrders(req, res) {
                     },
                 },
                 {
-                    customerName: {
+                    "$customer.name$": {
                         [Op.like]: `%${search}%`,
                     },
                 },
                 {
-                    customerPhone: {
+                    "$customer.phone$": {
                         [Op.like]: `%${search}%`,
                     },
                 },
@@ -49,11 +50,12 @@ async function GetOrders(req, res) {
                 "id",
                 "userId",
                 "orderNumber",
-                "customerName",
-                "customerPhone",
-                "customerEmail",
-                "customerCity",
-                "customerState",
+                "customerId",
+                "shippingName",
+                "shippingPhone",
+                "shippingEmail",
+                "shippingCity",
+                "shippingState",
                 "subtotal",
                 "discount",
                 "shippingCharge",
@@ -73,6 +75,16 @@ async function GetOrders(req, res) {
                     as: "items",
                     attributes: [],
                     required: false,
+                },
+                {
+                    model: Customer,
+                    as: "customer",
+                    attributes: [
+                        "id",
+                        "name",
+                        "phone",
+                        "email",
+                    ],
                 },
             ],
             group: ["Order.id"],
@@ -141,6 +153,10 @@ async function GetUserOrders(req, res) {
                     as: "user",
                     attributes: ["id", "name", "email"],
                 },
+                {
+                    model: Customer,
+                    as: "customer",
+                },
             ],
             order: [["createdAt", sort]],
             limit,
@@ -201,7 +217,11 @@ async function GetOrderById(req, res) {
                 {
                     model: User,
                     as: "user",
-                    attributes: ["id", "name", "email", "phone"],
+                    attributes: ["id", "name", "email", "phoneNo"],
+                },
+                {
+                    model: Customer,
+                    as: "customer",
                 },
             ],
         });
@@ -235,18 +255,32 @@ async function CreateOrder(req, res) {
     try {
         const {
             userId,
-            customerName,
-            customerPhone,
-            customerEmail,
-            customerAddress,
-            customerCity,
-            customerState,
-            customerPincode,
+            shippingName,
+            shippingPhone,
+            shippingEmail,
+            shippingAddress,
+            shippingCity,
+            shippingState,
+            shippingPincode,
+
             notes,
             items,
         } = req.body;
 
-        if (!customerName || !customerPhone || !customerAddress) {
+        const customer = await Customer.findOne({
+            where: {
+                // id: customerId,
+                userId,
+            },
+            transaction,
+        });
+
+        if (
+            !customer.id ||
+            !shippingName ||
+            !shippingPhone ||
+            !shippingAddress
+        ) {
             await transaction.rollback();
             return res.status(400).json({
                 success: false,
@@ -259,6 +293,16 @@ async function CreateOrder(req, res) {
             return res.status(400).json({
                 success: false,
                 message: "Order must contain at least one product.",
+            });
+        }
+
+
+        if (!customer) {
+            await transaction.rollback();
+
+            return res.status(404).json({
+                success: false,
+                message: "Customer not found.",
             });
         }
 
@@ -357,16 +401,21 @@ async function CreateOrder(req, res) {
 
         const order = await Order.create(
             {
-                userId: userId || null,
+                userId,
+                customerId: customer.id,
+
                 orderNumber,
-                customerName,
-                customerPhone,
-                customerEmail,
-                customerAddress,
-                customerCity,
-                customerState,
-                customerPincode,
+
+                shippingName,
+                shippingPhone,
+                shippingEmail,
+                shippingAddress,
+                shippingCity,
+                shippingState,
+                shippingPincode,
+
                 notes,
+
                 subtotal,
                 discount: 0,
                 shippingCharge: 0,
@@ -389,6 +438,10 @@ async function CreateOrder(req, res) {
 
         const createdOrder = await Order.findByPk(order.id, {
             include: [
+                {
+                    model: Customer,
+                    as: "customer",
+                },
                 {
                     model: OrderItem,
                     as: "items",

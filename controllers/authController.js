@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
+const Customer = require('../models/Customer');
+const sequelize = require('../config/mysqldb');
 
 async function Login(req, res) {
   try {
@@ -51,7 +53,63 @@ async function Login(req, res) {
   }
 }
 
-async function Register(req, res) {
+async function AdminLogin(req, res) {
+  try {
+    const { email, password } = req.body;
+
+    // Find user by email
+    const user = await User.findOne({
+      where: {
+        email,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User name,email and password is not found",
+      });
+    }
+    console.log(user.role);
+    if (user.role !== "Admin") {
+      return res.status(401).json({
+        success: false,
+        message: "Admin can only Login!",
+      });
+    }
+
+    // Compare password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid password",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      data: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phoneNo: user.phoneNo,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Login failed",
+    });
+  }
+}
+
+async function CustomerRegister(req, res) {
+  const transaction = await sequelize.transaction();
   try {
     const { name, email, phoneNo, password } = req.body;
 
@@ -92,7 +150,17 @@ async function Register(req, res) {
       email,
       phoneNo,
       password: hashedPassword,
-    });
+      role: "Customer"
+    }, { transaction });
+
+    await Customer.create({
+      userId: user.id,
+      name,
+      email,
+      phone: phoneNo,
+    }, { transaction });
+
+    await transaction.commit();
 
     return res.status(201).json({
       success: true,
@@ -106,7 +174,6 @@ async function Register(req, res) {
     });
   } catch (err) {
     console.error(err);
-
     return res.status(500).json({
       success: false,
       message: "Registration failed",
@@ -139,5 +206,5 @@ async function ListUsers(req, res) {
 }
 
 module.exports = {
-  Login, Register, ListUsers
+  Login, CustomerRegister, ListUsers, AdminLogin
 };

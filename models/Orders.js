@@ -1,6 +1,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/mysqldb");
 const User = require("./User");
+const Customer = require("./Customer");
 
 const Order = sequelize.define(
     "Order",
@@ -25,20 +26,28 @@ const Order = sequelize.define(
             type: DataTypes.STRING,
             unique: true,
         },
+        customerId: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            references: {
+                model: "customers",
+                key: "id",
+            },
+        },
 
-        customerName: DataTypes.STRING,
+        shippingName: DataTypes.STRING,
 
-        customerPhone: DataTypes.STRING,
+        shippingPhone: DataTypes.STRING,
 
-        customerEmail: DataTypes.STRING,
+        shippingEmail: DataTypes.STRING,
 
-        customerAddress: DataTypes.TEXT,
+        shippingAddress: DataTypes.TEXT,
 
-        customerCity: DataTypes.STRING,
+        shippingCity: DataTypes.STRING,
 
-        customerState: DataTypes.STRING,
+        shippingState: DataTypes.STRING,
 
-        customerPincode: DataTypes.STRING,
+        shippingPincode: DataTypes.STRING,
 
         notes: DataTypes.TEXT,
 
@@ -97,11 +106,20 @@ const Order = sequelize.define(
 Order.belongsTo(User, {
     foreignKey: "userId",
     as: "user",
-    allowNull: true,
 });
 
 User.hasMany(Order, {
     foreignKey: "userId",
+    as: "orders",
+});
+
+Order.belongsTo(Customer, {
+    foreignKey: "customerId",
+    as: "customer",
+});
+
+Customer.hasMany(Order, {
+    foreignKey: "customerId",
     as: "orders",
 });
 

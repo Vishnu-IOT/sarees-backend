@@ -17,6 +17,9 @@ router.get("/get-orders", GetOrders);
 // ✅ GET - Order details by ID
 router.get("/get-order/:orderId", GetOrderById);
 
+// ✅ GET - Order details by User ID
+router.get("/get-user-order/:userId", GetUserOrders);
+
 // ✅ POST - Create order
 router.post("/create-order", CreateOrder);
 
