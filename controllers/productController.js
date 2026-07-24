@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const sequelize = require("../config/mysqldb");
 const { Op } = require("sequelize");
+const crypto = require("crypto");
 
 // ✅ Get base URL from environment or construct it
 const getBaseUrl = (req) => {
@@ -95,7 +96,7 @@ async function GetProducts(req, res) {
 
         return res.status(200).json({
             success: true,
-            products: productsWithFullUrls,
+            products: rows,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -162,7 +163,7 @@ async function GetSarees(req, res) {
         return res.status(200).json({
             success: true,
             collection: "SAREE",
-            products: productsWithFullUrls,
+            products: rows,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -230,7 +231,7 @@ async function GetJewels(req, res) {
         return res.status(200).json({
             success: true,
             collection: "JEWEL",
-            products: productsWithFullUrls,
+            products: rows,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -283,7 +284,7 @@ async function GetLoomProducts(req, res) {
 
         return res.status(200).json({
             success: true,
-            products: productsWithFullUrls,
+            products: rows,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -326,12 +327,38 @@ async function CreateProduct(req, res) {
         let imageUrl = "";
 
         // Main product cover image — sent as field name "mainImage"
+        // const mainImageFile = req.files?.mainImage?.[0];
+        // if (mainImageFile) {
+        //     const fileName = `${Date.now()}-${mainImageFile.originalname}`;
+        //     const uploadPath = path.join(__dirname, "../public/uploads", fileName);
+        //     fs.writeFileSync(uploadPath, mainImageFile.buffer);
+        //     imageUrl = `/uploads/${fileName}`;
+        // }
+
         const mainImageFile = req.files?.mainImage?.[0];
+
         if (mainImageFile) {
-            const fileName = `${Date.now()}-${mainImageFile.originalname}`;
-            const uploadPath = path.join(__dirname, "../public/uploads", fileName);
-            fs.writeFileSync(uploadPath, mainImageFile.buffer);
-            imageUrl = `/uploads/${fileName}`;
+            const fileExt = mainImageFile.originalname.split(".").pop();
+            const uniqueId = crypto.randomUUID();
+
+            const fileName = `products/main-${uniqueId}.${fileExt}`;
+
+            const { error } = await supabase.storage
+                .from("uploads")
+                .upload(fileName, mainImageFile.buffer, {
+                    contentType: mainImageFile.mimetype,
+                    upsert: false,
+                });
+
+            if (error) {
+                throw error;
+            }
+
+            const { data } = supabase.storage
+                .from("uploads")
+                .getPublicUrl(fileName);
+
+            imageUrl = data.publicUrl;
         }
 
         const product = await Product.create(
@@ -376,20 +403,98 @@ async function CreateProduct(req, res) {
             // Variant images are under req.files.variantImages
             const variantFiles = req.files?.variantImages || [];
 
-            const attributes = variantsArray.map((variant) => {
+            // const attributes = variantsArray.map((variant) => {
+            //     // let variantImageUrl = null;
+
+            //     const hasImage = Boolean(variant.hasImage);
+            //     // if (hasImage && variantFiles[fileIndex]) {
+            //     //     const variantFile = variantFiles[fileIndex];
+            //     //     const fileName = `${Date.now()}-${variantFile.originalname}`;
+            //     //     const uploadPath = path.join(__dirname, "../public/uploads", fileName);
+            //     //     fs.writeFileSync(uploadPath, variantFile.buffer);
+            //     //     variantImageUrl = `/uploads/${fileName}`;
+            //     //     fileIndex++;
+            //     // }
+
+            //     let variantImageUrl = null;
+
+            //     if (hasImage && variantFiles[fileIndex]) {
+            //         const variantFile = variantFiles[fileIndex];
+
+            //         const fileExt = variantFile.originalname.split(".").pop();
+            //         const uniqueId = crypto.randomUUID();
+
+            //         const fileName = `products/variant-${uniqueId}.${fileExt}`;
+
+            //         const { error } = await supabase.storage
+            //             .from("uploads")
+            //             .upload(fileName, variantFile.buffer, {
+            //                 contentType: variantFile.mimetype,
+            //                 upsert: false,
+            //             });
+
+            //         if (error) {
+            //             throw error;
+            //         }
+
+            //         const { data } = supabase.storage
+            //             .from("uploads")
+            //             .getPublicUrl(fileName);
+
+            //         variantImageUrl = data.publicUrl;
+
+            //         fileIndex++;
+            //     }
+
+            //     return {
+            //         productId: product.id,
+            //         sku: variant.sku || null,
+            //         color: variant.color || null,
+            //         fabric: variant.fabric || null,
+            //         work: variant.work || null,
+            //         blouseLength: variant.blouseLength || null,
+            //         occasion: variant.occasion || null,
+            //         metal: variant.metal || null,
+            //         purity: variant.purity || null,
+            //         stone: variant.stone || null,
+            //         weight: variant.weight || null,
+            //         size: variant.size || null,
+            //         image_url: variantImageUrl,
+            //     };
+            // });
+
+            const attributes = [];
+
+            for (const variant of variantsArray) {
                 let variantImageUrl = null;
 
                 const hasImage = Boolean(variant.hasImage);
+
                 if (hasImage && variantFiles[fileIndex]) {
-                    const variantFile = variantFiles[fileIndex];
-                    const fileName = `${Date.now()}-${variantFile.originalname}`;
-                    const uploadPath = path.join(__dirname, "../public/uploads", fileName);
-                    fs.writeFileSync(uploadPath, variantFile.buffer);
-                    variantImageUrl = `/uploads/${fileName}`;
+                    const file = variantFiles[fileIndex];
+
+                    const fileExt = file.originalname.split(".").pop();
+                    const uniqueId = crypto.randomUUID();
+                    const fileName = `products/variant-${uniqueId}.${fileExt}`;
+
+                    const { error } = await supabase.storage
+                        .from("uploads")
+                        .upload(fileName, file.buffer, {
+                            contentType: file.mimetype,
+                            upsert: false,
+                        });
+
+                    if (error) throw error;
+
+                    const { data } = supabase.storage
+                        .from("uploads")
+                        .getPublicUrl(fileName);
+
+                    variantImageUrl = data.publicUrl;
                     fileIndex++;
                 }
 
-                return {
+                attributes.push({
                     productId: product.id,
                     sku: variant.sku || null,
                     color: variant.color || null,
@@ -403,8 +508,8 @@ async function CreateProduct(req, res) {
                     weight: variant.weight || null,
                     size: variant.size || null,
                     image_url: variantImageUrl,
-                };
-            });
+                });
+            }
 
             await ProductAttribute.bulkCreate(attributes, {
                 transaction,
@@ -437,7 +542,7 @@ async function CreateProduct(req, res) {
         return res.status(201).json({
             success: true,
             message: "Product created successfully",
-            data: productWithFullUrls,
+            data: createdProduct,
         });
     } catch (err) {
         await transaction.rollback();
@@ -514,24 +619,58 @@ async function UpdateProduct(req, res) {
         let mainImageUrl = product.image_url;
 
         // Main product cover image — sent as field name "mainImage"
+        // const mainImageFile = req.files?.mainImage?.[0];
+        // if (mainImageFile) {
+        //     // Delete old main image file if it exists
+        //     if (product.image_url && !product.image_url.startsWith("http")) {
+        //         const oldImage = path.join(
+        //             __dirname,
+        //             "../public",
+        //             product.image_url.replace(/^\/+/, "")
+        //         );
+        //         if (fs.existsSync(oldImage)) {
+        //             fs.unlinkSync(oldImage);
+        //         }
+        //     }
+
+        //     const fileName = `${Date.now()}-${mainImageFile.originalname}`;
+        //     const uploadPath = path.join(__dirname, "../public/uploads", fileName);
+        //     fs.writeFileSync(uploadPath, mainImageFile.buffer);
+        //     mainImageUrl = `/uploads/${fileName}`;
+        // }
+
         const mainImageFile = req.files?.mainImage?.[0];
+
         if (mainImageFile) {
-            // Delete old main image file if it exists
-            if (product.image_url && !product.image_url.startsWith("http")) {
-                const oldImage = path.join(
-                    __dirname,
-                    "../public",
-                    product.image_url.replace(/^\/+/, "")
-                );
-                if (fs.existsSync(oldImage)) {
-                    fs.unlinkSync(oldImage);
+            // Delete old image from Supabase
+            if (product.image_url) {
+                const oldPath = product.image_url.split("/object/public/uploads/")[1];
+
+                if (oldPath) {
+                    await supabase.storage.from("uploads").remove([oldPath]);
                 }
             }
 
-            const fileName = `${Date.now()}-${mainImageFile.originalname}`;
-            const uploadPath = path.join(__dirname, "../public/uploads", fileName);
-            fs.writeFileSync(uploadPath, mainImageFile.buffer);
-            mainImageUrl = `/uploads/${fileName}`;
+            const fileExt = mainImageFile.originalname.split(".").pop();
+            const uniqueId = crypto.randomUUID();
+            const fileName = `products/main-${uniqueId}.${fileExt}`;
+
+            const { error } = await supabase.storage
+                .from("uploads")
+                .upload(fileName, mainImageFile.buffer, {
+                    contentType: mainImageFile.mimetype,
+                    upsert: false,
+                });
+
+            if (error) {
+                throw error;
+            }
+
+            const { data } = supabase.storage
+                .from("uploads")
+                .getPublicUrl(fileName);
+
+            mainImageUrl = data.publicUrl;
         }
 
         await product.update(
@@ -559,25 +698,41 @@ async function UpdateProduct(req, res) {
             transaction,
         });
 
+        // const keptImageUrls = new Set(
+        //     variantsObj
+        //         .filter((v) => !v.hasNewImage && v.image_url)
+        //         .map((v) => toRelativeImageUrl(v.image_url, baseUrl))
+        // );
+
+        // oldAttributes.forEach((attr) => {
+        //     if (attr.image_url && !keptImageUrls.has(attr.image_url)) {
+        //         const oldImage = path.join(
+        //             __dirname,
+        //             "../public",
+        //             attr.image_url.replace(/^\/+/, "")
+        //         );
+
+        //         if (fs.existsSync(oldImage)) {
+        //             fs.unlinkSync(oldImage);
+        //         }
+        //     }
+        // });
+
         const keptImageUrls = new Set(
             variantsObj
                 .filter((v) => !v.hasNewImage && v.image_url)
-                .map((v) => toRelativeImageUrl(v.image_url, baseUrl))
+                .map((v) => v.image_url)
         );
 
-        oldAttributes.forEach((attr) => {
+        for (const attr of oldAttributes) {
             if (attr.image_url && !keptImageUrls.has(attr.image_url)) {
-                const oldImage = path.join(
-                    __dirname,
-                    "../public",
-                    attr.image_url.replace(/^\/+/, "")
-                );
+                const oldPath = attr.image_url.split("/object/public/uploads/")[1];
 
-                if (fs.existsSync(oldImage)) {
-                    fs.unlinkSync(oldImage);
+                if (oldPath) {
+                    await supabase.storage.from("uploads").remove([oldPath]);
                 }
             }
-        });
+        }
 
         await ProductAttribute.destroy({
             where: { productId: id },
@@ -590,24 +745,96 @@ async function UpdateProduct(req, res) {
             // Variant images are under req.files.variantImages
             const variantFiles = req.files?.variantImages || [];
 
-            const attributes = variantsObj.map((variant) => {
-                let variantImageUrl = toRelativeImageUrl(variant.image_url, baseUrl);
+            // const attributes = variantsObj.map((variant) => {
+            //     // let variantImageUrl = toRelativeImageUrl(variant.image_url, baseUrl);
+
+            //     // if (variant.hasNewImage && variantFiles[fileIndex]) {
+            //     //     const file = variantFiles[fileIndex];
+            //     //     const fileName = `${Date.now()}-${fileIndex}-${file.originalname}`;
+            //     //     const uploadPath = path.join(
+            //     //         __dirname,
+            //     //         "../public/uploads",
+            //     //         fileName
+            //     //     );
+
+            //     //     fs.writeFileSync(uploadPath, file.buffer);
+            //     //     variantImageUrl = `/uploads/${fileName}`;
+            //     //     fileIndex++;
+            //     // }
+            //     let variantImageUrl = variant.image_url || null;
+
+            //     if (variant.hasNewImage && variantFiles[fileIndex]) {
+            //         const file = variantFiles[fileIndex];
+
+            //         const fileExt = file.originalname.split(".").pop();
+            //         const uniqueId = crypto.randomUUID();
+            //         const fileName = `products/variant-${uniqueId}.${fileExt}`;
+
+            //         const { error } = await supabase.storage
+            //             .from("uploads")
+            //             .upload(fileName, file.buffer, {
+            //                 contentType: file.mimetype,
+            //                 upsert: false,
+            //             });
+
+            //         if (error) {
+            //             throw error;
+            //         }
+
+            //         const { data } = supabase.storage
+            //             .from("uploads")
+            //             .getPublicUrl(fileName);
+
+            //         variantImageUrl = data.publicUrl;
+            //         fileIndex++;
+            //     }
+
+            //     return {
+            //         productId: id,
+            //         sku: variant.sku || null,
+            //         color: variant.color || null,
+            //         fabric: variant.fabric || null,
+            //         work: variant.work || null,
+            //         blouseLength: variant.blouseLength || null,
+            //         occasion: variant.occasion || null,
+            //         metal: variant.metal || null,
+            //         purity: variant.purity || null,
+            //         stone: variant.stone || null,
+            //         weight: variant.weight || null,
+            //         size: variant.size || null,
+            //         image_url: variantImageUrl,
+            //     };
+            // });
+            const attributes = [];
+
+            for (const variant of variantsObj) {
+                let variantImageUrl = variant.image_url || null;
 
                 if (variant.hasNewImage && variantFiles[fileIndex]) {
                     const file = variantFiles[fileIndex];
-                    const fileName = `${Date.now()}-${fileIndex}-${file.originalname}`;
-                    const uploadPath = path.join(
-                        __dirname,
-                        "../public/uploads",
-                        fileName
-                    );
 
-                    fs.writeFileSync(uploadPath, file.buffer);
-                    variantImageUrl = `/uploads/${fileName}`;
+                    const fileExt = file.originalname.split(".").pop();
+                    const uniqueId = crypto.randomUUID();
+                    const fileName = `products/variant-${uniqueId}.${fileExt}`;
+
+                    const { error } = await supabase.storage
+                        .from("uploads")
+                        .upload(fileName, file.buffer, {
+                            contentType: file.mimetype,
+                            upsert: false,
+                        });
+
+                    if (error) throw error;
+
+                    const { data } = supabase.storage
+                        .from("uploads")
+                        .getPublicUrl(fileName);
+
+                    variantImageUrl = data.publicUrl;
                     fileIndex++;
                 }
 
-                return {
+                attributes.push({
                     productId: id,
                     sku: variant.sku || null,
                     color: variant.color || null,
@@ -621,8 +848,8 @@ async function UpdateProduct(req, res) {
                     weight: variant.weight || null,
                     size: variant.size || null,
                     image_url: variantImageUrl,
-                };
-            });
+                });
+            }
 
             await ProductAttribute.bulkCreate(attributes, {
                 transaction,
@@ -654,7 +881,7 @@ async function UpdateProduct(req, res) {
         return res.status(200).json({
             success: true,
             message: "Product updated successfully",
-            data: productWithFullUrls,
+            data: updatedProduct,
         });
     } catch (err) {
         await transaction.rollback();
@@ -696,32 +923,56 @@ async function DeleteProduct(req, res) {
         await transaction.commit();
 
         // Delete main product image
-        if (product.image_url) {
-            const imagePath = path.join(
-                __dirname,
-                "../public",
-                product.image_url.replace(/^\/+/, "")
-            );
+        // if (product.image_url) {
+        //     const imagePath = path.join(
+        //         __dirname,
+        //         "../public",
+        //         product.image_url.replace(/^\/+/, "")
+        //     );
 
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
+        //     if (fs.existsSync(imagePath)) {
+        //         fs.unlinkSync(imagePath);
+        //     }
+        // }
+
+        if (product.image_url) {
+            const oldPath = product.image_url.split("/object/public/uploads/")[1];
+
+            if (oldPath) {
+                await supabase.storage.from("uploads").remove([oldPath]);
             }
         }
 
         // Delete all variant images
-        attributes.forEach((attr) => {
-            if (attr.image_url) {
-                const imagePath = path.join(
-                    __dirname,
-                    "../public",
-                    attr.image_url.replace(/^\/+/, "")
-                );
+        // attributes.forEach((attr) => {
+        //     if (attr.image_url) {
+        //         const imagePath = path.join(
+        //             __dirname,
+        //             "../public",
+        //             attr.image_url.replace(/^\/+/, "")
+        //         );
 
-                if (fs.existsSync(imagePath)) {
-                    fs.unlinkSync(imagePath);
+        //         if (fs.existsSync(imagePath)) {
+        //             fs.unlinkSync(imagePath);
+        //         }
+        //     }
+        // });
+
+        for (const attr of attributes) {
+            if (attr.image_url) {
+                const oldPath = attr.image_url.split("/object/public/uploads/")[1];
+
+                if (oldPath) {
+                    const { error } = await supabase.storage
+                        .from("uploads")
+                        .remove([oldPath]);
+
+                    if (error) {
+                        console.error(error);
+                    }
                 }
             }
-        });
+        }
 
         return res.status(200).json({
             success: true,
