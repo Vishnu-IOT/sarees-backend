@@ -1,3 +1,4 @@
+const Customer = require("../models/Customer");
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 
@@ -184,10 +185,78 @@ async function DeleteUser(req, res) {
   }
 }
 
+// PUT /customers/:id - Update Customer
+async function UpdateCustomer(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, address, city, state, pincode } = req.body;
+
+    const customer = await Customer.findByPk(id);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    // Validate email format if provided
+    if (email && !isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email format",
+      });
+    }
+
+    // Validate phone
+    let finalPhone = customer.phone;
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, "").slice(0, 10);
+      if (cleanPhone.length !== 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone must be 10 digits",
+        });
+      }
+      finalPhone = cleanPhone;
+    }
+
+    // Validate pincode
+    if (pincode && pincode.replace(/\D/g, "").length !== 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Pincode must be 6 digits",
+      });
+    }
+
+    await customer.update({
+      name: name || customer.name,
+      email: email || customer.email,
+      phone: finalPhone,
+      address: address || customer.address,
+      city: city || customer.city,
+      state: state || customer.state,
+      pincode: pincode || customer.pincode,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Customer updated successfully",
+      data: customer,
+    });
+  } catch (err) {
+    console.error("Update Customer Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to update customer",
+    });
+  }
+}
+
 module.exports = {
   GetUsers,
   GetUserById,
   CreateUser,
   UpdateUser,
   DeleteUser,
+  UpdateCustomer
 };

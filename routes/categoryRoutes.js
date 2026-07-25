@@ -11,6 +11,7 @@ const {
     CreateSubCategory,
     UpdateSubCategory,
     DeleteSubCategory,
+    UpdateCategory,
 } = require("../controllers/categoryController");
 
 // ============ CATEGORIES ============
@@ -21,11 +22,14 @@ router.get("/get-categories", GetCategories);
 // ✅ NEW: GET - Fetch categories by collection (SAREE or JEWEL)
 router.get("/get-categories/:collection", GetCategoriesByCollection);
 
+// ✅ PUT - Update Category
+router.post("/update-category/:id", UpdateCategory);
+
 // ✅ POST - Add category
 router.post("/create-category", CreateCategory);
 
 // ✅ DELETE - Delete category
-router.delete("/delete-category/:id", DeleteCategory);
+router.get("/delete-category/:id", DeleteCategory);
 
 // ============ SUBCATEGORIES ============
 
@@ -39,9 +43,9 @@ router.get("/get-subcategories/:collection", GetSubCategoriesByCollection);
 router.post("/create-subcategory", CreateSubCategory);
 
 // ✅ PUT - Update subcategory
-router.put("/update-subcategory/:id", UpdateSubCategory);
+router.post("/update-subcategory/:id", UpdateSubCategory);
 
 // ✅ DELETE - Delete subcategory
-router.delete("/delete-subcategory/:id", DeleteSubCategory);
+router.get("/delete-subcategory/:id", DeleteSubCategory);
 
 module.exports = router;

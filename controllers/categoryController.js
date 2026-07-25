@@ -112,6 +112,40 @@ async function CreateCategory(req, res) {
     }
 }
 
+// ✅ PUT - Update Category
+async function UpdateCategory(req, res) {
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+
+        const category = await Category.findByPk(id);
+
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: "Category not found",
+            });
+        }
+
+        await category.update({
+            name: name || category.name,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Category updated successfully",
+            data: category,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update Category",
+        });
+    }
+}
+
 // ✅ DELETE - Delete category
 async function DeleteCategory(req, res) {
     try {
@@ -355,6 +389,7 @@ module.exports = {
     GetCategories,
     GetCategoriesByCollection,
     CreateCategory,
+    UpdateCategory,
     DeleteCategory,
     GetSubCategories,
     GetSubCategoriesByCollection,
