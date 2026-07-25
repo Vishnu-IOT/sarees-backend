@@ -16,10 +16,23 @@ async function Login(req, res) {
       },
     });
 
+    const customer = await Customer.findOne({
+      where: {
+        email,
+      },
+    });
+
     if (!user) {
       return res.status(401).json({
         success: false,
         message: "User name,email and password is not found",
+      });
+    }
+
+    if (!customer) {
+      return res.status(401).json({
+        success: false,
+        message: "Customer is not found",
       });
     }
 
@@ -41,6 +54,10 @@ async function Login(req, res) {
         name: user.name,
         email: user.email,
         phoneNo: user.phoneNo,
+        address: customer.address,
+        state: customer.state,
+        city: customer.city,
+        pincode: customer.pincode,
       },
     });
   } catch (err) {

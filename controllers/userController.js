@@ -185,6 +185,32 @@ async function DeleteUser(req, res) {
   }
 }
 
+// GET /customers/:userId - Get all customers
+async function GetCustomer(req, res) {
+  try {
+    const { userId } = req.params;
+    const customer = await Customer.findByPk(userId);
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: customer,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch Customer",
+    });
+  }
+}
+
 // PUT /customers/:id - Update Customer
 async function UpdateCustomer(req, res) {
   try {
@@ -258,5 +284,6 @@ module.exports = {
   CreateUser,
   UpdateUser,
   DeleteUser,
-  UpdateCustomer
+  UpdateCustomer,
+  GetCustomer
 };
