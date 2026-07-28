@@ -1,4 +1,8 @@
 const { Op } = require('sequelize');
+const SubmitRequestModel = require('../models/SubmitRequest');
+const Order = require('../models/Orders');
+const User = require('../models/User');
+const OrderItem = require('../models/OrderItems');
 
 // POST - Submit a new request
 async function SubmitRequest(req, res) {
@@ -24,7 +28,6 @@ async function SubmitRequest(req, res) {
         // ✅ Validate orderId if provided
         let orderData = null;
         if (orderId) {
-            const Order = req.app.get('db').Order;
             orderData = await Order.findByPk(orderId);
 
             if (!orderData) {
@@ -44,7 +47,7 @@ async function SubmitRequest(req, res) {
         }
 
         // Create request
-        const submitRequest = await req.app.get('db').SubmitRequest.create({
+        const submitRequest = await SubmitRequestModel.create({
             userId,
             orderId: orderId || null, // ✅ NEW
             name: name.trim(),
@@ -57,13 +60,13 @@ async function SubmitRequest(req, res) {
         });
 
         // Fetch with associations
-        const requestWithAssociations = await req.app.get('db').SubmitRequest.findByPk(
+        const requestWithAssociations = await SubmitRequestModel.findByPk(
             submitRequest.id,
             {
                 include: [
                     {
                         association: 'order',
-                        model: req.app.get('db').Order,
+                        model: Order,
                         attributes: ['id', 'orderNumber', 'subtotal', 'grandTotal', 'status'],
                     },
                 ],
@@ -102,19 +105,19 @@ async function GetAllRequests(req, res) {
         if (requestType) where.requestType = requestType;
         if (orderId) where.orderId = orderId; // ✅ NEW
 
-        const { count, rows } = await req.app.get('db').SubmitRequest.findAndCountAll({
+        const { count, rows } = await SubmitRequestModel.findAndCountAll({
             where,
             include: [
                 {
                     association: 'user',
-                    model: req.app.get('db').User,
+                    model: User,
                     attributes: ['id', 'name', 'email'],
                     required: false,
                 },
                 {
                     // ✅ NEW: Include order details
                     association: 'order',
-                    model: req.app.get('db').Order,
+                    model: Order,
                     attributes: ['id', 'orderNumber', 'subtotal', 'grandTotal', 'status', 'createdAt'],
                     required: false,
                 },
@@ -146,22 +149,22 @@ async function GetRequestById(req, res) {
     try {
         const { id } = req.params;
 
-        const request = await req.app.get('db').SubmitRequest.findByPk(id, {
+        const request = await SubmitRequestModel.findByPk(id, {
             include: [
                 {
                     association: 'user',
-                    model: req.app.get('db').User,
+                    model: User,
                     attributes: ['id', 'name', 'email'],
                     required: false,
                 },
                 {
                     // ✅ NEW: Include order details
                     association: 'order',
-                    model: req.app.get('db').Order,
+                    model: Order,
                     attributes: ['id', 'orderNumber', 'subtotal', 'grandTotal', 'status', 'createdAt'],
                     include: [
                         {
-                            model: req.app.get('db').OrderItem,
+                            model: OrderItem,
                             as: 'items',
                             attributes: ['productName', 'sku', 'color', 'quantity', 'price'],
                         },
@@ -198,7 +201,7 @@ async function UpdateRequestStatus(req, res) {
         const { id } = req.params;
         const { status, priority, adminNotes } = req.body;
 
-        const request = await req.app.get('db').SubmitRequest.findByPk(id);
+        const request = await SubmitRequestModel.findByPk(id);
 
         if (!request) {
             return res.status(404).json({
@@ -250,7 +253,7 @@ async function DeleteRequest(req, res) {
     try {
         const { id } = req.params;
 
-        const deleted = await req.app.get('db').SubmitRequest.destroy({
+        const deleted = await SubmitRequestModel.destroy({
             where: { id },
         });
 
@@ -283,12 +286,12 @@ async function GetRequestsByOrderId(req, res) {
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
 
-        const { count, rows } = await req.app.get('db').SubmitRequest.findAndCountAll({
+        const { count, rows } = await SubmitRequestModel.findAndCountAll({
             where: { orderId },
             include: [
                 {
                     association: 'user',
-                    model: req.app.get('db').User,
+                    model: User,
                     attributes: ['id', 'name', 'email'],
                     required: false,
                 },

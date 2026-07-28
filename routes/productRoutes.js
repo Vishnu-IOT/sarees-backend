@@ -10,6 +10,8 @@ const {
     CreateProduct,
     UpdateProduct,
     DeleteProduct,
+    AddToLoom,
+    RemoveFromLoom,
 } = require("../controllers/productController");
 
 // ✅ GET all products (mixed)
@@ -46,5 +48,8 @@ router.post(
 
 // DELETE product
 router.post("/delete-product/:id", DeleteProduct);
+
+router.post("/add-to-loom/:productId", AddToLoom);
+router.post("/remove-from-loom/:productId", RemoveFromLoom);
 
 module.exports = router;

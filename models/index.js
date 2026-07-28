@@ -27,7 +27,7 @@ fs
     );
   })
   .forEach(file => {
-    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
+    const model = require(path.join(__dirname, file));
     db[model.name] = model;
   });
 
@@ -36,6 +36,29 @@ Object.keys(db).forEach(modelName => {
     db[modelName].associate(db);
   }
 });
+
+// Add associations for Favorite
+if (db.Favorite && db.User && db.Product) {
+  db.Favorite.belongsTo(db.User, {
+    foreignKey: "userId",
+    as: "user",
+  });
+
+  db.Favorite.belongsTo(db.Product, {
+    foreignKey: "productId",
+    as: "product",
+  });
+
+  db.User.hasMany(db.Favorite, {
+    foreignKey: "userId",
+    as: "favorites",
+  });
+
+  db.Product.hasMany(db.Favorite, {
+    foreignKey: "productId",
+    as: "favorites",
+  });
+}
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;

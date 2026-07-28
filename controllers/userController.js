@@ -1,4 +1,5 @@
 const Customer = require("../models/Customer");
+const Favorite = require("../models/Favourites");
 const Order = require("../models/Orders");
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
@@ -354,6 +355,54 @@ async function UpdateCustomer(req, res) {
   }
 }
 
+async function GetUserProfileStats(req, res) {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required",
+      });
+    }
+
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "name", "email", "createdAt"],
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const [likesCount, totalOrders] = await Promise.all([
+      Favorite.count({ where: { userId } }),
+      Order.count({ where: { userId } }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        likesCount,
+        totalOrders,
+        dateOfJoining: user.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error("Get User Profile Stats Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch user profile stats",
+      error: err.message,
+    });
+  }
+}
+
 module.exports = {
   GetUsers,
   GetUserById,
@@ -362,5 +411,6 @@ module.exports = {
   DeleteUser,
   UpdateCustomer,
   GetCustomer,
-  GetCustomerById
+  GetCustomerById,
+  GetUserProfileStats
 };

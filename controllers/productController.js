@@ -299,6 +299,105 @@ async function GetLoomProducts(req, res) {
     }
 }
 
+const MAX_LOOM_PRODUCTS = 10;
+
+// ✅ NEW: Add a product to loom (max 10 at a time — evicts the oldest loom product if full)
+async function AddToLoom(req, res) {
+    try {
+        const { productId } = req.params;
+
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Product not found",
+            });
+        }
+
+        if (product.loom) {
+            return res.status(409).json({
+                success: false,
+                message: "Product is already in loom",
+            });
+        }
+
+        let evicted = null;
+
+        const currentCount = await Product.count({ where: { loom: true } });
+
+        if (currentCount >= MAX_LOOM_PRODUCTS) {
+            // Loom is full — remove the oldest loom product to make room
+            const oldest = await Product.findOne({
+                where: { loom: true },
+                order: [["updatedAt", "ASC"]],
+            });
+
+            if (oldest) {
+                evicted = { id: oldest.id, name: oldest.name };
+                oldest.loom = false;
+                await oldest.save();
+            }
+        }
+
+        product.loom = true;
+        await product.save();
+
+        return res.status(200).json({
+            success: true,
+            message: evicted
+                ? `Loom was full — removed "${evicted.name}" and added this product`
+                : "Product added to loom",
+            data: product,
+            evicted,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to add product to loom",
+        });
+    }
+}
+
+// ✅ NEW: Remove a product from loom
+async function RemoveFromLoom(req, res) {
+    try {
+        const { productId } = req.params;
+
+        const product = await Product.findByPk(productId);
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Product not found",
+            });
+        }
+
+        if (!product.loom) {
+            return res.status(404).json({
+                success: false,
+                message: "Product is not in loom",
+            });
+        }
+
+        product.loom = false;
+        await product.save();
+
+        return res.status(200).json({
+            success: true,
+            message: "Product removed from loom",
+            data: product,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to remove product from loom",
+        });
+    }
+}
+
 async function CreateProduct(req, res) {
     const transaction = await sequelize.transaction();
 
@@ -1007,6 +1106,8 @@ module.exports = {
     GetSarees,
     GetJewels,
     GetLoomProducts,
+    AddToLoom,
+    RemoveFromLoom,
     CreateProduct,
     UpdateProduct,
     DeleteProduct,
