@@ -22,11 +22,27 @@ const ProductAttribute = sequelize.define(
             allowNull: true,
         },
 
+        discount: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            defaultValue: 0,
+        },
+
+        price: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: false,
+        },
+
+        offerPrice: {
+            type: DataTypes.DECIMAL(10, 2),
+            allowNull: true
+        },
+
         color: {
             type: DataTypes.JSON,
             allowNull: true,
         },
-        
+
         sku: {
             type: DataTypes.STRING,
             unique: true,

@@ -1,6 +1,13 @@
 const Customer = require("../models/Customer");
+const Order = require("../models/Orders");
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
+const { fn, col, Op } = require("sequelize");
+
+function isValidEmail(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
 
 // GET /users - Get all admin users
 async function GetUsers(req, res) {
@@ -185,8 +192,77 @@ async function DeleteUser(req, res) {
   }
 }
 
-// GET /customers/:userId - Get all customers
 async function GetCustomer(req, res) {
+  try {
+    const role = req.query.role || 'Customer';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    const where = { role };
+
+    const { count, rows } = await User.findAndCountAll({
+      where,
+      attributes: {
+        exclude: ["password"],
+        include: [
+          [fn("COUNT", col("orders.id")), "orderCount"],
+        ],
+      },
+      include: [
+        {
+          model: Order,
+          as: "orders",
+          attributes: [],
+          required: false,
+        },
+        {
+          model: Customer,
+          as: "customers",
+          attributes: ["id", "name", "phone", "email", "address"],
+          required: false,
+        },
+      ],
+      group: [
+        "User.id",
+        // ✅ ADD ALL CUSTOMER COLUMNS TO GROUP BY
+        "customers.id",
+        "customers.name",
+        "customers.phone",
+        "customers.email",
+        "customers.address",
+      ],
+      subQuery: false,
+      raw: true,
+      order: [["createdAt", "DESC"]],
+      limit,
+      offset,
+    });
+
+    const formattedData = rows.map((user) => ({
+      ...user,
+      orderCount: parseInt(user.orderCount) || 0,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      totalCustomers: count.length,
+      currentPage: page,
+      totalPages: Math.ceil(count.length / limit),
+      role: role,
+      data: formattedData,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch customers",
+      error: err.message,
+    });
+  }
+}
+// GET /customers/:userId - Get all customers
+async function GetCustomerById(req, res) {
   try {
     const { userId } = req.params;
     const customer = await Customer.findByPk(userId);
@@ -285,5 +361,6 @@ module.exports = {
   UpdateUser,
   DeleteUser,
   UpdateCustomer,
-  GetCustomer
+  GetCustomer,
+  GetCustomerById
 };

@@ -9,6 +9,7 @@ const categoryRoutes = require("./routes/categoryRoutes");
 const productRoutes = require("./routes/productRoutes");
 const ordersRoutes = require("./routes/ordersRoutes");
 const userRoutes = require("./routes/userRoutes");
+const requestRoutes = require("./routes/requestRoutes");
 const sequelize = require("./config/mysqldb");
 
 const app = express();
@@ -50,6 +51,7 @@ app.use("/category", categoryRoutes);
 app.use("/products", productRoutes);
 app.use("/orders", ordersRoutes);
 app.use("/users", userRoutes);
+app.use("/service-request", requestRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

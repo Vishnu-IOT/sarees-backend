@@ -6,6 +6,7 @@ const Product = require("../models/Products");
 const ProductAttribute = require("../models/ProductAttributes");
 const User = require("../models/User");
 const Customer = require("../models/Customer");
+const { sendOrderStatusEmail } = require("../middlewares/emailServices");
 
 // ✅ ADMIN FUNCTION: Get all orders (existing)
 async function GetOrders(req, res) {
@@ -493,7 +494,26 @@ async function UpdateOrderStatus(req, res) {
             });
         }
 
-        const order = await Order.findByPk(id);
+        const order = await Order.findByPk(id, {
+            include: [
+                {
+                    model: OrderItem,
+                    as: "items",
+                    include: [
+                        {
+                            model: Product,
+                            as: "product",
+                            attributes: ["id", "name"],
+                        },
+                    ],
+                },
+                {
+                    model: User,
+                    as: "user",
+                    attributes: ["id", "name", "email"],
+                },
+            ],
+        });
 
         if (!order) {
             return res.status(404).json({
@@ -502,7 +522,18 @@ async function UpdateOrderStatus(req, res) {
             });
         }
 
+        // Skip email if status hasn't changed
+        const oldStatus = order.status;
         await order.update({ status });
+
+        // Send email if status changed
+        if (oldStatus !== status && order.user?.email) {
+            await sendOrderStatusEmail(
+                order,
+                order.user.email,
+                order.user.name
+            );
+        }
 
         return res.status(200).json({
             success: true,
@@ -511,6 +542,7 @@ async function UpdateOrderStatus(req, res) {
                 id: order.id,
                 orderNumber: order.orderNumber,
                 status: order.status,
+                emailSent: order.user?.email ? true : false,
             },
         });
     } catch (error) {
@@ -519,6 +551,7 @@ async function UpdateOrderStatus(req, res) {
         return res.status(500).json({
             success: false,
             message: "Failed to update order status.",
+            error: error.message,
         });
     }
 }
