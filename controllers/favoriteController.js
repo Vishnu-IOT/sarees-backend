@@ -93,6 +93,7 @@ async function RemoveFromFavorite(req, res) {
 
         const deleted = await Favorite.destroy({
             where: { userId, productId, productType }
+            // where: { userId, productId }
         });
 
         if (!deleted) {

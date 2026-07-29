@@ -8,7 +8,7 @@ const OrderItem = require('../models/OrderItems');
 async function SubmitRequest(req, res) {
     try {
         const { name, email, phone, subject, message, requestType, orderId } = req.body;
-        const userId = req.user?.id || null;
+        const { userId } = req.params || null;
 
         // Validation
         if (!name || !email || !subject || !message) {

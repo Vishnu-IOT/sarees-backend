@@ -35,7 +35,7 @@ const upload = multer({
 });
 
 // Public routes
-router.post('/create-submit-request', upload.single('attachment'), SubmitRequest);
+router.post('/create-submit-request/:userId', upload.single('attachment'), SubmitRequest);
 
 // Admin routes
 router.get('/get-request', GetAllRequests);
