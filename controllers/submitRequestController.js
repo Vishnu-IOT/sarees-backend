@@ -203,6 +203,57 @@ async function GetRequestById(req, res) {
     }
 }
 
+// GET - Get request by ID
+async function GetRequestAdminById(req, res) {
+    try {
+        const { id } = req.params;
+
+        const request = await SubmitRequestModel.findByPk(id, {
+            include: [
+                {
+                    association: 'user',
+                    model: User,
+                    attributes: ['id', 'name', 'email'],
+                    required: false,
+                },
+                {
+                    // ✅ NEW: Include order details
+                    association: 'order',
+                    model: Order,
+                    attributes: ['id', 'orderNumber', 'subtotal', 'grandTotal', 'status', 'createdAt'],
+                    include: [
+                        {
+                            model: OrderItem,
+                            as: 'items',
+                            attributes: ['productName', 'sku', 'color', 'quantity', 'price'],
+                        },
+                    ],
+                    required: false,
+                },
+            ],
+        });
+
+        if (!request) {
+            return res.status(404).json({
+                success: false,
+                message: 'Request not found',
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: request,
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch request',
+            error: err.message,
+        });
+    }
+}
+
 // PUT - Update request status (Admin only)
 async function UpdateRequestStatus(req, res) {
     try {
@@ -330,6 +381,7 @@ module.exports = {
     SubmitRequest,
     GetAllRequests,
     GetRequestById,
+    GetRequestAdminById,
     UpdateRequestStatus,
     DeleteRequest,
     GetRequestsByOrderId, // ✅ NEW

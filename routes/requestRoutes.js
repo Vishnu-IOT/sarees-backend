@@ -7,7 +7,8 @@ const {
     GetRequestById,
     UpdateRequestStatus,
     DeleteRequest,
-    GetRequestsByOrderId, // ✅ NEW
+    GetRequestsByOrderId,
+    GetRequestAdminById, // ✅ NEW
 } = require('../controllers/submitRequestController');
 
 // Configure multer
@@ -40,6 +41,7 @@ router.post('/create-submit-request/:userId', upload.single('attachment'), Submi
 // Admin routes
 router.get('/get-request', GetAllRequests);
 router.get('/reqeust-by-id/:userId', GetRequestById);
+router.get('/admin-reqeust-by-id/:id', GetRequestAdminById);
 router.put('/update-request/:id', UpdateRequestStatus);
 router.delete('/delete-request/:id', DeleteRequest);
 
