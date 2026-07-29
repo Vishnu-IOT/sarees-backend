@@ -81,6 +81,9 @@ async function GetProducts(req, res) {
                         "stone",
                         "weight",
                         "size",
+                        "price",
+                        "offerPrice",
+                        "discount"
                     ],
                 },
             ],
@@ -147,6 +150,9 @@ async function GetSarees(req, res) {
                         "work",
                         "blouseLength",
                         "occasion",
+                        "price",
+                        "offerPrice",
+                        "discount"
                     ],
                 },
             ],
@@ -215,6 +221,9 @@ async function GetJewels(req, res) {
                         "stone",
                         "weight",
                         "size",
+                        "price",
+                        "offerPrice",
+                        "discount"
                     ],
                 },
             ],
