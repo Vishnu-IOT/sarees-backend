@@ -39,7 +39,7 @@ router.post('/create-submit-request/:userId', upload.single('attachment'), Submi
 
 // Admin routes
 router.get('/get-request', GetAllRequests);
-router.get('/reqeust-by-id/:id', GetRequestById);
+router.get('/reqeust-by-id/:userId', GetRequestById);
 router.put('/update-request/:id', UpdateRequestStatus);
 router.delete('/delete-request/:id', DeleteRequest);
 

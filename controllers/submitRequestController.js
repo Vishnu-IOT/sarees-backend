@@ -8,13 +8,20 @@ const OrderItem = require('../models/OrderItems');
 async function SubmitRequest(req, res) {
     try {
         const { name, email, phone, subject, message, requestType, orderId } = req.body;
-        const { userId } = req.params || null;
+        const { userId } = req.params;
 
         // Validation
         if (!name || !email || !subject || !message) {
             return res.status(400).json({
                 success: false,
                 message: 'Name, email, subject, and message are required',
+            });
+        }
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'UserId is required!',
             });
         }
 
@@ -147,9 +154,10 @@ async function GetAllRequests(req, res) {
 // GET - Get request by ID
 async function GetRequestById(req, res) {
     try {
-        const { id } = req.params;
+        const { userId } = req.params;
 
-        const request = await SubmitRequestModel.findByPk(id, {
+        const request = await SubmitRequestModel.findAll({
+            where: { userId },
             include: [
                 {
                     association: 'user',
