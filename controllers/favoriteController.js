@@ -2,6 +2,7 @@ const db = require('../models');
 const Product = require('../models/Products');
 const User = require('../models/User');
 const Favorite = require('../models/Favourites');
+const ProductAttribute = require('../models/ProductAttributes');
 
 
 // Add to favorites
@@ -149,7 +150,17 @@ async function GetMyFavorites(req, res) {
                 {
                     model: Product,
                     as: 'product',
-                    attributes: ['id', 'name', 'price', 'offerPrice', 'image_url', 'collection']
+                    attributes: ['id', 'name', 'price', 'offerPrice', 'collection'],
+                    include: [
+                        {
+                            model: ProductAttribute,
+                            as: 'attributes', // Use your association alias
+                            attributes: ['image_url'],
+                            limit: 1,
+                            order: [['id', 'ASC']],
+                            separate: true
+                        }
+                    ]
                 }
             ],
             order: [['createdAt', 'DESC']],
