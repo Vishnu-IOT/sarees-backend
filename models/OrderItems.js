@@ -31,7 +31,7 @@ const OrderItem = sequelize.define(
 
         attributeId: {
             type: DataTypes.INTEGER,
-            allowNull: true,
+            allowNull: false,
         },
 
         subtotal: DataTypes.DECIMAL(10, 2),
@@ -80,18 +80,20 @@ OrderItem.belongsTo(Product, {
 ProductAttribute.hasMany(OrderItem, {
     foreignKey: {
         name: "attributeId",
-        allowNull: true,
+        allowNull: false,
     },
-    onDelete: "SET NULL",
+    onDelete: "RESTRICT",
+    onUpdate: "CASCADE",
     as: "orderItems",
 });
 
 OrderItem.belongsTo(ProductAttribute, {
     foreignKey: {
         name: "attributeId",
-        allowNull: true,
+        allowNull: false,
     },
-    onDelete: "SET NULL",
+    onDelete: "RESTRICT",
+    onUpdate: "CASCADE",
     as: "attribute",
 });
 
