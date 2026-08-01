@@ -116,7 +116,10 @@ async function CreateUser(req, res) {
       data: userJson,
     });
   } catch (err) {
+    await transaction.rollback();
+
     console.error("CreateUser Error:", err);
+
     return res.status(500).json({
       success: false,
       message: err.message || "Failed to create user",
@@ -139,6 +142,24 @@ async function UpdateUser(req, res) {
       return res.status(404).json({
         success: false,
         message: "User not found",
+      });
+    }
+
+    const existingUser = await User.findOne({
+      where: {
+        email,
+        id: {
+          [Op.ne]: id,
+        },
+      },
+    });
+
+    if (existingUser) {
+      await transaction.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: "Email already exists",
       });
     }
 
@@ -325,7 +346,9 @@ async function GetCustomer(req, res) {
 async function GetCustomerById(req, res) {
   try {
     const { userId } = req.params;
-    const customer = await Customer.findByPk(userId);
+    const customer = await Customer.findOne({
+      where: { userId },
+    });
 
     if (!customer) {
       return res.status(404).json({
