@@ -71,6 +71,7 @@ async function GetProducts(req, res) {
                         "id",
                         "color",
                         "image_url",
+                        "quantity",
                         "sku",
                         "fabric",
                         "work",
@@ -145,6 +146,7 @@ async function GetSarees(req, res) {
                         "id",
                         "color",
                         "image_url",
+                        "quantity",
                         "sku",
                         "fabric",
                         "work",
@@ -215,6 +217,7 @@ async function GetJewels(req, res) {
                         "id",
                         "color",
                         "image_url",
+                        "quantity",
                         "sku",
                         "metal",
                         "purity",
@@ -407,6 +410,69 @@ async function RemoveFromLoom(req, res) {
     }
 }
 
+async function GetProductById(req, res) {
+    try {
+        const { id } = req.params;
+
+        const product = await Product.findByPk(id, {
+            include: [
+                {
+                    model: Category,
+                    as: "category",
+                    attributes: ["id", "name", "collection"],
+                },
+                {
+                    model: SubCategory,
+                    as: "subcategory",
+                    attributes: ["id", "name"],
+                },
+                {
+                    model: ProductAttribute,
+                    as: "attributes",
+                    attributes: [
+                        "id",
+                        "color",
+                        "image_url",
+                        "quantity",
+                        "sku",
+                        "fabric",
+                        "work",
+                        "blouseLength",
+                        "occasion",
+                        "metal",
+                        "purity",
+                        "stone",
+                        "weight",
+                        "size",
+                        "price",
+                        "offerPrice",
+                        "discount",
+                    ],
+                },
+            ],
+        });
+
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Product not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: product,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch product",
+        });
+    }
+}
+
 async function CreateProduct(req, res) {
     const transaction = await sequelize.transaction();
 
@@ -559,6 +625,7 @@ async function CreateProduct(req, res) {
             //         sku: variant.sku || null,
             //         color: variant.color || null,
             //         fabric: variant.fabric || null,
+            // quantity: variant.quantity ?? 0,
             // discount: variant.discount || null,
             //         price: variant.price || null,
             //         offerPrice: variant.offerPrice || null,
@@ -610,6 +677,7 @@ async function CreateProduct(req, res) {
                     sku: variant.sku || null,
                     color: variant.color || null,
                     fabric: variant.fabric || null,
+                    quantity: variant.quantity ?? 0,
                     discount: variant.discount || null,
                     price: variant.price || null,
                     offerPrice: variant.offerPrice || null,
@@ -908,6 +976,7 @@ async function UpdateProduct(req, res) {
             //         sku: variant.sku || null,
             //         color: variant.color || null,
             //         fabric: variant.fabric || null,
+            // quantity: variant.quantity ?? 0,
             // discount: variant.discount || null,
             //     price: variant.price || null,
             //         offerPrice: variant.offerPrice || null,
@@ -955,6 +1024,7 @@ async function UpdateProduct(req, res) {
                     productId: id,
                     sku: variant.sku || null,
                     color: variant.color || null,
+                    quantity: variant.quantity ?? 0,
                     fabric: variant.fabric || null,
                     discount: variant.discount || null,
                     price: variant.price || null,
@@ -1114,6 +1184,7 @@ module.exports = {
     GetProducts,
     GetSarees,
     GetJewels,
+    GetProductById,
     GetLoomProducts,
     AddToLoom,
     RemoveFromLoom,

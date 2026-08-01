@@ -21,6 +21,12 @@ const Category = sequelize.define(
             defaultValue: "SAREE",
         },
 
+        status: {
+            type: DataTypes.ENUM('active', 'inactive'),
+            allowNull: false,
+            defaultValue: 'active',
+        },
+
         category: {
             type: DataTypes.VIRTUAL,
             get() {

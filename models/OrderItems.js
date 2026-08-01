@@ -3,6 +3,7 @@ const sequelize = require("../config/mysqldb");
 
 const Order = require("./Orders");
 const Product = require("./Products");
+const ProductAttribute = require("./ProductAttributes");
 
 const OrderItem = sequelize.define(
     "OrderItem",
@@ -26,6 +27,11 @@ const OrderItem = sequelize.define(
         discount: {
             type: DataTypes.DECIMAL(10, 2),
             defaultValue: 0,
+        },
+
+        attributeId: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
         },
 
         subtotal: DataTypes.DECIMAL(10, 2),
@@ -69,6 +75,24 @@ OrderItem.belongsTo(Product, {
     },
     onDelete: "CASCADE",
     as: "product",
+});
+
+ProductAttribute.hasMany(OrderItem, {
+    foreignKey: {
+        name: "attributeId",
+        allowNull: true,
+    },
+    onDelete: "SET NULL",
+    as: "orderItems",
+});
+
+OrderItem.belongsTo(ProductAttribute, {
+    foreignKey: {
+        name: "attributeId",
+        allowNull: true,
+    },
+    onDelete: "SET NULL",
+    as: "attribute",
 });
 
 module.exports = OrderItem;

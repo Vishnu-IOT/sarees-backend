@@ -42,8 +42,8 @@ router.post('/create-submit-request/:userId', upload.single('attachment'), Submi
 router.get('/get-request', GetAllRequests);
 router.get('/reqeust-by-id/:userId', GetRequestById);
 router.get('/admin-reqeust-by-id/:id', GetRequestAdminById);
-router.put('/update-request/:id', UpdateRequestStatus);
-router.delete('/delete-request/:id', DeleteRequest);
+router.post('/update-request/:id', UpdateRequestStatus);
+router.get('/delete-request/:id', DeleteRequest);
 
 // ✅ NEW: Get requests for specific order
 router.get('/orders-request/:orderId', GetRequestsByOrderId);

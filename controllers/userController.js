@@ -4,6 +4,7 @@ const Order = require("../models/Orders");
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const { fn, col, Op } = require("sequelize");
+const sequelize = require('../config/mysqldb');
 
 function isValidEmail(email) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62,6 +63,7 @@ async function GetUserById(req, res) {
 
 // POST /users - Create new admin user
 async function CreateUser(req, res) {
+  const transaction = await sequelize.transaction();
   try {
     const { name, email, phoneNo, password, role, status } = req.body;
 
@@ -94,10 +96,19 @@ async function CreateUser(req, res) {
       password: hashedPassword,
       role: role || "Admin",
       status: status || "Active",
-    });
+    }, { transaction });
+
+    await Customer.create({
+      userId: user.id,
+      name,
+      email,
+      phone: finalPhone,
+    }, { transaction });
 
     const userJson = user.toJSON();
     delete userJson.password;
+
+    await transaction.commit();
 
     return res.status(201).json({
       success: true,
@@ -115,24 +126,35 @@ async function CreateUser(req, res) {
 
 // PUT /users/:id - Update admin user
 async function UpdateUser(req, res) {
+  const transaction = await sequelize.transaction();
+
   try {
     const { id } = req.params;
     const { name, email, phoneNo, password, role, status } = req.body;
 
-    const user = await User.findByPk(id);
+    const user = await User.findByPk(id, { transaction });
+
     if (!user) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         message: "User not found",
       });
     }
 
+    const customer = await Customer.findOne({
+      where: { userId: id },
+      transaction,
+    });
+
     let updatedPassword = user.password;
+
     if (password && password.trim()) {
       updatedPassword = await bcrypt.hash(password.trim(), 10);
     }
 
     let finalPhone = user.phoneNo;
+
     if (phoneNo) {
       const cleanPhone = phoneNo.replace(/\D/g, "").slice(0, 10);
       if (cleanPhone.length === 10) {
@@ -140,14 +162,30 @@ async function UpdateUser(req, res) {
       }
     }
 
-    await user.update({
-      name: name || user.name,
-      email: email || user.email,
-      phoneNo: finalPhone,
-      password: updatedPassword,
-      role: role || user.role,
-      status: status || user.status,
-    });
+    await user.update(
+      {
+        name: name || user.name,
+        email: email || user.email,
+        phoneNo: finalPhone,
+        password: updatedPassword,
+        role: role || user.role,
+        status: status || user.status,
+      },
+      { transaction }
+    );
+
+    if (customer) {
+      await customer.update(
+        {
+          name: name || customer.name,
+          email: email || customer.email,
+          phone: finalPhone,
+        },
+        { transaction }
+      );
+    }
+
+    await transaction.commit();
 
     const userJson = user.toJSON();
     delete userJson.password;
@@ -158,7 +196,10 @@ async function UpdateUser(req, res) {
       data: userJson,
     });
   } catch (err) {
+    await transaction.rollback();
+
     console.error("UpdateUser Error:", err);
+
     return res.status(500).json({
       success: false,
       message: err.message || "Failed to update user",
@@ -168,27 +209,45 @@ async function UpdateUser(req, res) {
 
 // DELETE /users/:id - Delete admin user
 async function DeleteUser(req, res) {
+  const transaction = await sequelize.transaction();
+
   try {
     const { id } = req.params;
 
-    const deleted = await User.destroy({ where: { id } });
+    const deleted = await User.destroy({
+      where: { id },
+      transaction,
+    });
 
     if (!deleted) {
+      await transaction.rollback();
+
       return res.status(404).json({
         success: false,
         message: "User not found",
       });
     }
 
+    await Customer.destroy({
+      where: { userId: id },
+      transaction,
+    });
+
+    await transaction.commit();
+
     return res.status(200).json({
       success: true,
       message: "User deleted successfully",
     });
   } catch (err) {
+    await transaction.rollback();
+
     console.error(err);
+
     return res.status(500).json({
       success: false,
       message: "Failed to delete user",
+      error: err.message,
     });
   }
 }
@@ -290,20 +349,27 @@ async function GetCustomerById(req, res) {
 
 // PUT /customers/:id - Update Customer
 async function UpdateCustomer(req, res) {
+  const transaction = await sequelize.transaction();
+
   try {
     const { id } = req.params;
     const { name, email, phone, address, city, state, pincode } = req.body;
 
-    const customer = await Customer.findByPk(id);
+    const customer = await Customer.findByPk(id, { transaction });
+
     if (!customer) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         message: "Customer not found",
       });
     }
 
-    // Validate email format if provided
+    const user = await User.findByPk(customer.userId, { transaction });
+
+    // Validate email
     if (email && !isValidEmail(email)) {
+      await transaction.rollback();
       return res.status(400).json({
         success: false,
         message: "Invalid email format",
@@ -312,34 +378,57 @@ async function UpdateCustomer(req, res) {
 
     // Validate phone
     let finalPhone = customer.phone;
+
     if (phone) {
       const cleanPhone = phone.replace(/\D/g, "").slice(0, 10);
+
       if (cleanPhone.length !== 10) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: "Phone must be 10 digits",
         });
       }
+
       finalPhone = cleanPhone;
     }
 
     // Validate pincode
     if (pincode && pincode.replace(/\D/g, "").length !== 6) {
+      await transaction.rollback();
       return res.status(400).json({
         success: false,
         message: "Pincode must be 6 digits",
       });
     }
 
-    await customer.update({
-      name: name || customer.name,
-      email: email || customer.email,
-      phone: finalPhone,
-      address: address || customer.address,
-      city: city || customer.city,
-      state: state || customer.state,
-      pincode: pincode || customer.pincode,
-    });
+    // Update Customer
+    await customer.update(
+      {
+        name: name || customer.name,
+        email: email || customer.email,
+        phone: finalPhone,
+        address: address || customer.address,
+        city: city || customer.city,
+        state: state || customer.state,
+        pincode: pincode || customer.pincode,
+      },
+      { transaction }
+    );
+
+    // Update User
+    if (user) {
+      await user.update(
+        {
+          name: name || user.name,
+          email: email || user.email,
+          phoneNo: finalPhone,
+        },
+        { transaction }
+      );
+    }
+
+    await transaction.commit();
 
     return res.status(200).json({
       success: true,
@@ -347,7 +436,10 @@ async function UpdateCustomer(req, res) {
       data: customer,
     });
   } catch (err) {
+    await transaction.rollback();
+
     console.error("Update Customer Error:", err);
+
     return res.status(500).json({
       success: false,
       message: err.message || "Failed to update customer",

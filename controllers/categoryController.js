@@ -4,9 +4,24 @@ const Category = require("../models/Category");
 const SubCategory = require("../models/SubCategory");
 
 // ✅ GET - Fetch all categories
+const { fn, col } = require("sequelize");
+
 async function GetCategories(req, res) {
     try {
         const categories = await Category.findAll({
+            attributes: {
+                include: [
+                    [fn("COUNT", col("subcategories.id")), "subcategoryCount"],
+                ],
+            },
+            include: [
+                {
+                    model: SubCategory,
+                    as: "subcategories",
+                    attributes: [],
+                },
+            ],
+            group: ["Category.id"],
             order: [["createdAt", "DESC"]],
         });
 
@@ -62,7 +77,7 @@ async function GetCategoriesByCollection(req, res) {
 // ✅ POST - Add category
 async function CreateCategory(req, res) {
     try {
-        const { name, collection } = req.body;
+        const { name, collection, status } = req.body;
 
         if (!name) {
             return res.status(400).json({
@@ -75,6 +90,13 @@ async function CreateCategory(req, res) {
             return res.status(400).json({
                 success: false,
                 message: "Collection must be either 'SAREE' or 'JEWEL'",
+            });
+        }
+
+        if (!["active", "inactive"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Status must be active or inactive",
             });
         }
 
@@ -95,6 +117,7 @@ async function CreateCategory(req, res) {
         const newCategory = await Category.create({
             name,
             collection: collection.toUpperCase(),
+            status: status || "active",
         });
 
         return res.status(201).json({
@@ -116,7 +139,7 @@ async function CreateCategory(req, res) {
 async function UpdateCategory(req, res) {
     try {
         const { id } = req.params;
-        const { name } = req.body;
+        const { name, collection, status } = req.body;
 
         const category = await Category.findByPk(id);
 
@@ -129,6 +152,10 @@ async function UpdateCategory(req, res) {
 
         await category.update({
             name: name || category.name,
+            collection: collection
+                ? collection.toUpperCase()
+                : category.collection,
+            status: status || category.status,
         });
 
         return res.status(200).json({
@@ -142,6 +169,44 @@ async function UpdateCategory(req, res) {
         return res.status(500).json({
             success: false,
             message: "Failed to update Category",
+        });
+    }
+}
+
+// ✅ GET - Update category status
+async function UpdateCategoryStatus(req, res) {
+    try {
+        const { id, status } = req.query;
+
+        if (!["active", "inactive"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Status must be active or inactive",
+            });
+        }
+
+        const category = await Category.findByPk(id);
+
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: "Category not found",
+            });
+        }
+
+        await category.update({ status });
+
+        return res.status(200).json({
+            success: true,
+            message: `Category ${status} successfully`,
+            data: category,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update category status",
         });
     }
 }
@@ -248,6 +313,40 @@ async function GetSubCategoriesByCollection(req, res) {
     }
 }
 
+// ✅ NEW: GET - Fetch subcategories by category ID
+async function GetSubCategoriesByCategoryId(req, res) {
+    try {
+        const { categoryId } = req.params;
+
+        const subcategories = await SubCategory.findAll({
+            where: {
+                categoryId,
+            },
+            include: [
+                {
+                    model: Category,
+                    as: "category",
+                    attributes: ["id", "name", "collection"],
+                },
+            ],
+            order: [["createdAt", "DESC"]],
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: subcategories,
+            count: subcategories.length,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch subcategories",
+        });
+    }
+}
+
 // ✅ POST - Create subcategory
 async function CreateSubCategory(req, res) {
     try {
@@ -266,6 +365,13 @@ async function CreateSubCategory(req, res) {
             return res.status(404).json({
                 success: false,
                 message: "Category not found",
+            });
+        }
+
+        if (!["active", "inactive"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Status must be active or inactive",
             });
         }
 
@@ -352,6 +458,43 @@ async function UpdateSubCategory(req, res) {
         });
     }
 }
+// ✅ GET - Update subcategory status
+async function UpdateSubCategoryStatus(req, res) {
+    try {
+        const { id, status } = req.query;
+
+        if (!["active", "inactive"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Status must be active or inactive",
+            });
+        }
+
+        const subcategory = await SubCategory.findByPk(id);
+
+        if (!subcategory) {
+            return res.status(404).json({
+                success: false,
+                message: "Subcategory not found",
+            });
+        }
+
+        await subcategory.update({ status });
+
+        return res.status(200).json({
+            success: true,
+            message: `Subcategory ${status} successfully`,
+            data: subcategory,
+        });
+    } catch (err) {
+        console.error(err);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update subcategory status",
+        });
+    }
+}
 
 // ✅ DELETE - Delete subcategory
 async function DeleteSubCategory(req, res) {
@@ -390,10 +533,13 @@ module.exports = {
     GetCategoriesByCollection,
     CreateCategory,
     UpdateCategory,
+    UpdateCategoryStatus,
     DeleteCategory,
     GetSubCategories,
     GetSubCategoriesByCollection,
+    GetSubCategoriesByCategoryId,
     CreateSubCategory,
     UpdateSubCategory,
+    UpdateSubCategoryStatus,
     DeleteSubCategory,
 };

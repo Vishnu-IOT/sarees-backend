@@ -181,7 +181,7 @@ async function CustomerRegister(req, res) {
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully",
+      message: "Customer registered successfully",
       data: {
         id: user.id,
         name: user.name,

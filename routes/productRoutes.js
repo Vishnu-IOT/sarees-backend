@@ -12,6 +12,7 @@ const {
     DeleteProduct,
     AddToLoom,
     RemoveFromLoom,
+    GetProductById,
 } = require("../controllers/productController");
 
 // ✅ GET all products (mixed)
@@ -25,6 +26,9 @@ router.get("/get-jewels", GetJewels);
 
 // ✅ NEW: GET all LOOM products
 router.get("/get-looms", GetLoomProducts);
+
+// ✅ NEW: GET product by ID
+router.get("/get-product/:id", GetProductById);
 
 // POST - Create product with main image + variant images
 router.post(

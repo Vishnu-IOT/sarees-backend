@@ -17,12 +17,17 @@ async function GetOrders(req, res) {
 
         const search = req.query.search || "";
         const status = req.query.status || "";
+        const paymentStatus = req.query.paymentStatus || "";
         const sort = req.query.sort === "ASC" ? "ASC" : "DESC";
 
         const where = {};
 
         if (status) {
             where.status = status;
+        }
+
+        if (paymentStatus) {
+            where.paymentStatus = paymentStatus;
         }
 
         if (search) {
@@ -123,6 +128,7 @@ async function GetUserOrders(req, res) {
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
 
+        const paymentStatus = req.query.paymentStatus || "";
         const status = req.query.status || "";
         const sort = req.query.sort === "ASC" ? "ASC" : "DESC";
 
@@ -133,6 +139,10 @@ async function GetUserOrders(req, res) {
 
         if (status) {
             where.status = status;
+        }
+
+        if (paymentStatus) {
+            where.paymentStatus = paymentStatus;
         }
 
         const { count, rows } = await Order.findAndCountAll({
@@ -276,13 +286,22 @@ async function CreateOrder(req, res) {
             transaction,
         });
 
+        if (!customer) {
+            await transaction.rollback();
+
+            return res.status(404).json({
+                success: false,
+                message: "Customer not found.",
+            });
+        }
+
         if (
-            !customer.id ||
             !shippingName ||
             !shippingPhone ||
             !shippingAddress
         ) {
             await transaction.rollback();
+
             return res.status(400).json({
                 success: false,
                 message: "Customer details are required.",
@@ -375,6 +394,15 @@ async function CreateOrder(req, res) {
                 });
             }
 
+            if (selectedAttribute.quantity < quantity) {
+                await transaction.rollback();
+
+                return res.status(400).json({
+                    success: false,
+                    message: `${product.name} has only ${selectedAttribute.quantity} item(s) left in stock.`,
+                });
+            }
+
             const price =
                 Number(product.offerPrice) > 0
                     ? Number(product.offerPrice)
@@ -384,8 +412,16 @@ async function CreateOrder(req, res) {
 
             subtotal += lineTotal;
 
+            await selectedAttribute.update(
+                {
+                    quantity: selectedAttribute.quantity - quantity,
+                },
+                { transaction }
+            );
+
             orderItems.push({
                 productId: product.id,
+                attributeId: selectedAttribute.id,
                 productName: product.name,
                 collection: product.collection,
                 sku: selectedAttribute?.sku || null,
@@ -474,27 +510,37 @@ async function CreateOrder(req, res) {
 }
 
 async function UpdateOrderStatus(req, res) {
+    const transaction = await sequelize.transaction();
+
     try {
         const { id } = req.params;
-        const { status } = req.body;
+        const { status, paymentStatus, paymentMethod } = req.body;
 
-        const validStatus = [
+        const validOrderStatus = [
             "Pending",
             "Confirmed",
             "Packed",
             "Shipped",
             "Delivered",
             "Cancelled",
+            "Returned",
         ];
 
-        if (!status || !validStatus.includes(status)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid order status.",
-            });
-        }
+        const validPaymentStatus = [
+            "Pending",
+            "Paid",
+            "Failed",
+            "Refunded",
+        ];
+
+        const validPaymentMethod = [
+            "WhatsApp",
+            "COD",
+            "Online"
+        ];
 
         const order = await Order.findByPk(id, {
+            transaction,
             include: [
                 {
                     model: OrderItem,
@@ -516,18 +562,83 @@ async function UpdateOrderStatus(req, res) {
         });
 
         if (!order) {
+            await transaction.rollback();
+
             return res.status(404).json({
                 success: false,
                 message: "Order not found.",
             });
         }
 
-        // Skip email if status hasn't changed
-        const oldStatus = order.status;
-        await order.update({ status });
+        const updateData = {};
 
-        // Send email if status changed
-        if (oldStatus !== status && order.user?.email) {
+        if (status) {
+            if (!validOrderStatus.includes(status)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid order status.",
+                });
+            }
+            updateData.status = status;
+        }
+
+        if (paymentStatus) {
+            if (!validPaymentStatus.includes(paymentStatus)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid payment status.",
+                });
+            }
+            updateData.paymentStatus = paymentStatus;
+        }
+
+        if (paymentMethod) {
+            if (!validPaymentMethod.includes(paymentMethod)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid payment method.",
+                });
+            }
+            updateData.paymentMethod = paymentMethod;
+        }
+
+        const oldStatus = order.status;
+
+        await order.update(updateData, { transaction });
+
+        const shouldRestock =
+            updateData.status &&
+            ["Cancelled", "Returned"].includes(updateData.status) &&
+            !["Cancelled", "Returned"].includes(oldStatus);
+
+        if (shouldRestock) {
+            for (const item of order.items) {
+
+                const attribute = await ProductAttribute.findByPk(
+                    item.attributeId,
+                    { transaction }
+                );
+
+                if (!attribute) continue;
+
+                await attribute.update(
+                    {
+                        quantity:
+                            Number(attribute.quantity) +
+                            Number(item.quantity),
+                    },
+                    { transaction }
+                );
+            }
+        }
+
+        await transaction.commit();
+        // Send email only if order status changes
+        if (
+            updateData.status &&
+            oldStatus !== updateData.status &&
+            order.user?.email
+        ) {
             await sendOrderStatusEmail(
                 order,
                 order.user.email,
@@ -537,20 +648,24 @@ async function UpdateOrderStatus(req, res) {
 
         return res.status(200).json({
             success: true,
-            message: "Order status updated successfully.",
+            message: "Order updated successfully.",
             data: {
                 id: order.id,
                 orderNumber: order.orderNumber,
                 status: order.status,
-                emailSent: order.user?.email ? true : false,
+                paymentStatus: order.paymentStatus,
+                paymentMethod: order.paymentMethod,
+                emailSent:
+                    updateData.status && order.user?.email ? true : false,
             },
         });
     } catch (error) {
+        await transaction.rollback();
         console.error(error);
 
         return res.status(500).json({
             success: false,
-            message: "Failed to update order status.",
+            message: "Failed to update order.",
             error: error.message,
         });
     }

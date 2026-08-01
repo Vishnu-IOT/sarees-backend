@@ -105,11 +105,13 @@ async function GetAllRequests(req, res) {
         const offset = (page - 1) * limit;
         const status = req.query.status || '';
         const requestType = req.query.requestType || '';
+        const priority = req.query.priority || '';
         const orderId = req.query.orderId || ''; // ✅ NEW: Filter by orderId
 
         const where = {};
         if (status) where.status = status;
         if (requestType) where.requestType = requestType;
+        if (priority) where.priority = priority;
         if (orderId) where.orderId = orderId; // ✅ NEW
 
         const { count, rows } = await SubmitRequestModel.findAndCountAll({
