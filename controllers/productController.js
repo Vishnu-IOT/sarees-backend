@@ -10,7 +10,7 @@ const crypto = require("crypto");
 
 // ✅ Get base URL from environment or construct it
 const getBaseUrl = (req) => {
-    return process.env.BASE_URL || `${req.protocol}://${req.get("host")}`;
+    return "https://mediumorchid-rhinoceros-818505.hostingersite.com";
 };
 
 // ✅ Function to add full URL to image_url
