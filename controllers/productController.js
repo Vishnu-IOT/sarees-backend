@@ -1,6 +1,5 @@
 const Product = require("../models/Products");
 const Category = require("../models/Category");
-const supabase = require("../config/supabase");
 const SubCategory = require("../models/SubCategory");
 const ProductAttribute = require("../models/ProductAttributes");
 const fs = require("fs");
@@ -516,23 +515,12 @@ async function CreateProduct(req, res) {
             const uniqueId = crypto.randomUUID();
 
             const fileName = `products/main-${uniqueId}.${fileExt}`;
+            const uploadPath = path.join(__dirname, "../public/uploads", fileName);
 
-            const { error } = await supabase.storage
-                .from("uploads")
-                .upload(fileName, mainImageFile.buffer, {
-                    contentType: mainImageFile.mimetype,
-                    upsert: false,
-                });
+            fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+            fs.writeFileSync(uploadPath, mainImageFile.buffer);
 
-            if (error) {
-                throw error;
-            }
-
-            const { data } = supabase.storage
-                .from("uploads")
-                .getPublicUrl(fileName);
-
-            imageUrl = data.publicUrl;
+            imageUrl = `/uploads/${fileName}`;
         }
 
         const product = await Product.create(
@@ -654,21 +642,12 @@ async function CreateProduct(req, res) {
                     const fileExt = file.originalname.split(".").pop();
                     const uniqueId = crypto.randomUUID();
                     const fileName = `products/variant-${uniqueId}.${fileExt}`;
+                    const uploadPath = path.join(__dirname, "../public/uploads", fileName);
 
-                    const { error } = await supabase.storage
-                        .from("uploads")
-                        .upload(fileName, file.buffer, {
-                            contentType: file.mimetype,
-                            upsert: false,
-                        });
+                    fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+                    fs.writeFileSync(uploadPath, file.buffer);
 
-                    if (error) throw error;
-
-                    const { data } = supabase.storage
-                        .from("uploads")
-                        .getPublicUrl(fileName);
-
-                    variantImageUrl = data.publicUrl;
+                    variantImageUrl = `/uploads/${fileName}`;
                     fileIndex++;
                 }
 
@@ -824,35 +803,24 @@ async function UpdateProduct(req, res) {
         const mainImageFile = req.files?.mainImage?.[0];
 
         if (mainImageFile) {
-            // Delete old image from Supabase
+            // Delete old image from local storage
             if (product.image_url) {
-                const oldPath = product.image_url.split("/object/public/uploads/")[1];
+                const oldPath = path.join(__dirname, "../public", product.image_url.replace(/^\/+/, ""));
 
-                if (oldPath) {
-                    await supabase.storage.from("uploads").remove([oldPath]);
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath);
                 }
             }
 
             const fileExt = mainImageFile.originalname.split(".").pop();
             const uniqueId = crypto.randomUUID();
             const fileName = `products/main-${uniqueId}.${fileExt}`;
+            const uploadPath = path.join(__dirname, "../public/uploads", fileName);
 
-            const { error } = await supabase.storage
-                .from("uploads")
-                .upload(fileName, mainImageFile.buffer, {
-                    contentType: mainImageFile.mimetype,
-                    upsert: false,
-                });
+            fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+            fs.writeFileSync(uploadPath, mainImageFile.buffer);
 
-            if (error) {
-                throw error;
-            }
-
-            const { data } = supabase.storage
-                .from("uploads")
-                .getPublicUrl(fileName);
-
-            mainImageUrl = data.publicUrl;
+            mainImageUrl = `/uploads/${fileName}`;
         }
 
         await product.update(
@@ -908,10 +876,10 @@ async function UpdateProduct(req, res) {
 
         for (const attr of oldAttributes) {
             if (attr.image_url && !keptImageUrls.has(attr.image_url)) {
-                const oldPath = attr.image_url.split("/object/public/uploads/")[1];
+                const oldPath = path.join(__dirname, "../public", attr.image_url.replace(/^\/+/, ""));
 
-                if (oldPath) {
-                    await supabase.storage.from("uploads").remove([oldPath]);
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath);
                 }
             }
         }
@@ -1002,21 +970,12 @@ async function UpdateProduct(req, res) {
                     const fileExt = file.originalname.split(".").pop();
                     const uniqueId = crypto.randomUUID();
                     const fileName = `products/variant-${uniqueId}.${fileExt}`;
+                    const uploadPath = path.join(__dirname, "../public/uploads", fileName);
 
-                    const { error } = await supabase.storage
-                        .from("uploads")
-                        .upload(fileName, file.buffer, {
-                            contentType: file.mimetype,
-                            upsert: false,
-                        });
+                    fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+                    fs.writeFileSync(uploadPath, file.buffer);
 
-                    if (error) throw error;
-
-                    const { data } = supabase.storage
-                        .from("uploads")
-                        .getPublicUrl(fileName);
-
-                    variantImageUrl = data.publicUrl;
+                    variantImageUrl = `/uploads/${fileName}`;
                     fileIndex++;
                 }
 
@@ -1126,10 +1085,10 @@ async function DeleteProduct(req, res) {
         // }
 
         if (product.image_url) {
-            const oldPath = product.image_url.split("/object/public/uploads/")[1];
+            const oldPath = path.join(__dirname, "../public", product.image_url.replace(/^\/+/, ""));
 
-            if (oldPath) {
-                await supabase.storage.from("uploads").remove([oldPath]);
+            if (fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
             }
         }
 
@@ -1150,16 +1109,14 @@ async function DeleteProduct(req, res) {
 
         for (const attr of attributes) {
             if (attr.image_url) {
-                const oldPath = attr.image_url.split("/object/public/uploads/")[1];
+                const oldPath = path.join(__dirname, "../public", attr.image_url.replace(/^\/+/, ""));
 
-                if (oldPath) {
-                    const { error } = await supabase.storage
-                        .from("uploads")
-                        .remove([oldPath]);
-
-                    if (error) {
-                        console.error(error);
+                try {
+                    if (fs.existsSync(oldPath)) {
+                        fs.unlinkSync(oldPath);
                     }
+                } catch (error) {
+                    console.error(error);
                 }
             }
         }
