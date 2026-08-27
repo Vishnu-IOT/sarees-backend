@@ -14,12 +14,13 @@ const getBaseUrl = (req) => {
 };
 
 // ✅ Function to add full URL to image_url
+// ✅ Function to add full URL to image_url
 const addFullImageUrls = (products, baseUrl) => {
     return products.map((product) => {
         const productData = product.toJSON ? product.toJSON() : product;
 
         // Prefix the main product cover image
-        if (productData.image_url && !productData.image_url.startsWith("http")) {
+        if (productData.image_url) {
             productData.image_url = `${baseUrl}${productData.image_url}`;
         }
 
@@ -99,7 +100,7 @@ async function GetProducts(req, res) {
 
         return res.status(200).json({
             success: true,
-            products: rows,
+            products: productsWithFullUrls,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -170,7 +171,7 @@ async function GetSarees(req, res) {
         return res.status(200).json({
             success: true,
             collection: "SAREE",
-            products: rows,
+            products: productsWithFullUrls,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -242,7 +243,7 @@ async function GetJewels(req, res) {
         return res.status(200).json({
             success: true,
             collection: "JEWEL",
-            products: rows,
+            products: productsWithFullUrls,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -295,7 +296,7 @@ async function GetLoomProducts(req, res) {
 
         return res.status(200).json({
             success: true,
-            products: rows,
+            products: productsWithFullUrls,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -703,7 +704,7 @@ async function CreateProduct(req, res) {
         return res.status(201).json({
             success: true,
             message: "Product created successfully",
-            data: createdProduct,
+            data: productWithFullUrls,
         });
     } catch (err) {
         await transaction.rollback();
@@ -1030,7 +1031,7 @@ async function UpdateProduct(req, res) {
         return res.status(200).json({
             success: true,
             message: "Product updated successfully",
-            data: updatedProduct,
+            data: productWithFullUrls,
         });
     } catch (err) {
         await transaction.rollback();
