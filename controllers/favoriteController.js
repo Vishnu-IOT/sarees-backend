@@ -3,6 +3,7 @@ const Product = require('../models/Products');
 const User = require('../models/User');
 const Favorite = require('../models/Favourites');
 const ProductAttribute = require('../models/ProductAttributes');
+const { attachFullImageUrls } = require('../utils/imageUrl');
 
 
 // Add to favorites
@@ -185,7 +186,7 @@ async function GetMyFavorites(req, res) {
             success: true,
             message: 'Favorites fetched successfully',
             userId,
-            data: rows,
+            data: attachFullImageUrls(rows, ['image_url']),
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count

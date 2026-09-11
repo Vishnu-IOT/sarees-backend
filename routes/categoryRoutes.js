@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const upload = require("../middlewares/upload");
 
 const {
     GetCategories,
@@ -48,11 +49,19 @@ router.get("/get-subcategories/:collection", GetSubCategoriesByCollection);
 // ✅ NEW: GET - Fetch subcategories by category ID
 router.get("/get-subcategories-by-category/:categoryId", GetSubCategoriesByCategoryId);
 
-// ✅ POST - Create subcategory
-router.post("/create-subcategory", CreateSubCategory);
+// ✅ POST - Create subcategory (accepts an optional "image" file upload)
+router.post(
+    "/create-subcategory",
+    upload.single("image"),
+    CreateSubCategory
+);
 
-// ✅ PUT - Update subcategory
-router.post("/update-subcategory/:id", UpdateSubCategory);
+// ✅ PUT - Update subcategory (accepts an optional "image" file upload)
+router.post(
+    "/update-subcategory/:id",
+    upload.single("image"),
+    UpdateSubCategory
+);
 
 // ✅ GET - Update subcategory Status (active/inactive)
 router.get("/subcategory-status-update", UpdateSubCategoryStatus);

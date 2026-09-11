@@ -3,6 +3,12 @@ const SubmitRequestModel = require('../models/SubmitRequest');
 const Order = require('../models/Orders');
 const User = require('../models/User');
 const OrderItem = require('../models/OrderItems');
+const { attachFullImageUrls } = require('../utils/imageUrl');
+
+// ✅ SubmitRequest rows carry their file link in "attachmentUrl" (not
+// "image_url"/"image"), so convert that field to a full URL on the way out.
+const withFullAttachmentUrl = (data) =>
+    attachFullImageUrls(data, ['attachmentUrl']);
 
 // POST - Submit a new request
 async function SubmitRequest(req, res) {
@@ -85,7 +91,7 @@ async function SubmitRequest(req, res) {
         return res.status(201).json({
             success: true,
             message: 'Your request has been submitted successfully. We will get back to you soon.',
-            data: requestWithAssociations,
+            data: withFullAttachmentUrl(requestWithAssociations),
         });
     } catch (err) {
         console.error('SubmitRequest Error:', err);
@@ -141,7 +147,7 @@ async function GetAllRequests(req, res) {
             total: count,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
-            data: rows,
+            data: withFullAttachmentUrl(rows),
         });
     } catch (err) {
         console.error(err);
@@ -193,7 +199,7 @@ async function GetRequestById(req, res) {
 
         return res.status(200).json({
             success: true,
-            data: request,
+            data: withFullAttachmentUrl(request),
         });
     } catch (err) {
         console.error(err);
@@ -244,7 +250,7 @@ async function GetRequestAdminById(req, res) {
 
         return res.status(200).json({
             success: true,
-            data: request,
+            data: withFullAttachmentUrl(request),
         });
     } catch (err) {
         console.error(err);
@@ -297,7 +303,7 @@ async function UpdateRequestStatus(req, res) {
         return res.status(200).json({
             success: true,
             message: 'Request updated successfully',
-            data: request,
+            data: withFullAttachmentUrl(request),
         });
     } catch (err) {
         console.error(err);
@@ -367,7 +373,7 @@ async function GetRequestsByOrderId(req, res) {
             total: count,
             currentPage: page,
             totalPages: Math.ceil(count / limit),
-            data: rows,
+            data: withFullAttachmentUrl(rows),
         });
     } catch (err) {
         console.error(err);

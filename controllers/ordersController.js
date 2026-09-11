@@ -7,6 +7,11 @@ const ProductAttribute = require("../models/ProductAttributes");
 const User = require("../models/User");
 const Customer = require("../models/Customer");
 const { sendOrderStatusEmail } = require("../middlewares/emailServices");
+const { attachFullImageUrls } = require("../utils/imageUrl");
+
+// ✅ Order items store their image as a relative path ("/uploads/..."),
+// so convert it to a full URL before it ever reaches the frontend or email.
+const withFullOrderImageUrls = (order) => attachFullImageUrls(order, ["image_url"]);
 
 // ✅ ADMIN FUNCTION: Get all orders (existing)
 async function GetOrders(req, res) {
@@ -190,7 +195,7 @@ async function GetUserOrders(req, res) {
         return res.status(200).json({
             success: true,
             userId: parseInt(userId),
-            orders: rows,
+            orders: withFullOrderImageUrls(rows),
             currentPage: page,
             totalPages: Math.ceil(count / limit),
             total: count,
@@ -246,7 +251,7 @@ async function GetOrderById(req, res) {
 
         return res.status(200).json({
             success: true,
-            data: order,
+            data: withFullOrderImageUrls(order),
         });
 
     } catch (error) {
@@ -494,7 +499,7 @@ async function CreateOrder(req, res) {
         return res.status(201).json({
             success: true,
             message: "Order created successfully.",
-            data: createdOrder,
+            data: withFullOrderImageUrls(createdOrder),
         });
     } catch (error) {
         await transaction.rollback();
@@ -639,8 +644,10 @@ async function UpdateOrderStatus(req, res) {
             oldStatus !== updateData.status &&
             order.user?.email
         ) {
+            // ✅ Convert item image_urls to full URLs so they actually
+            // render in the email client (relative paths don't load there).
             await sendOrderStatusEmail(
-                order,
+                withFullOrderImageUrls(order),
                 order.user.email,
                 order.user.name
             );

@@ -12,6 +12,10 @@ const {
     DeleteProduct,
     AddToLoom,
     RemoveFromLoom,
+    GetNewArrivals,
+    AddToNewArrival,
+    RemoveFromNewArrival,
+    UpdateProductStatus,
     GetProductById,
 } = require("../controllers/productController");
 
@@ -55,5 +59,19 @@ router.post("/delete-product/:id", DeleteProduct);
 
 router.post("/add-to-loom/:productId", AddToLoom);
 router.post("/remove-from-loom/:productId", RemoveFromLoom);
+
+// ============ NEW ARRIVALS ============
+
+// ✅ NEW: GET all New Arrival products
+router.get("/get-new-arrivals", GetNewArrivals);
+
+// ✅ NEW: Add / remove a product from New Arrivals
+router.post("/add-to-new-arrival/:productId", AddToNewArrival);
+router.post("/remove-from-new-arrival/:productId", RemoveFromNewArrival);
+
+// ============ PRODUCT STATUS ============
+
+// ✅ NEW: Toggle a product active/inactive — GET /product-status-update?id=1&status=inactive
+router.get("/product-status-update", UpdateProductStatus);
 
 module.exports = router;

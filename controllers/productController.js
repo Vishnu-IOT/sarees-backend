@@ -7,32 +7,30 @@ const path = require("path");
 const sequelize = require("../config/mysqldb");
 const { Op } = require("sequelize");
 const crypto = require("crypto");
+const {
+  BASE_URL,
+  toFullImageUrl,
+  toRelativeImageUrl: toRelative,
+} = require("../utils/imageUrl");
 
-// ✅ Get base URL from environment or construct it
+// ✅ Get base URL from environment (APP_BASE_URL) or fallback
 const getBaseUrl = (req) => {
-  return "https://mediumorchid-rhinoceros-818505.hostingersite.com";
+  return BASE_URL;
 };
 
-// ✅ Function to add full URL to image_url
-// ✅ Function to add full URL to image_url
+// ✅ Function to add full URL to image_url (main product + every variant/attribute)
 const addFullImageUrls = (products, baseUrl) => {
   return products.map((product) => {
     const productData = product.toJSON ? product.toJSON() : product;
 
     if (productData.image_url) {
-      productData.image_url = productData.image_url.startsWith("http")
-        ? productData.image_url
-        : `${baseUrl}${productData.image_url}`;
+      productData.image_url = toFullImageUrl(productData.image_url);
     }
 
     if (productData.attributes && Array.isArray(productData.attributes)) {
       productData.attributes = productData.attributes.map((attr) => ({
         ...attr,
-        image_url: attr.image_url
-          ? attr.image_url.startsWith("http")
-            ? attr.image_url
-            : `${baseUrl}${attr.image_url}`
-          : null,
+        image_url: attr.image_url ? toFullImageUrl(attr.image_url) : null,
       }));
     }
 
@@ -43,11 +41,15 @@ const addFullImageUrls = (products, baseUrl) => {
 // ✅ Helper: strip the baseUrl back off an image_url the frontend sent us,
 // so we always store/compare relative paths ("/uploads/xyz.jpg") internally.
 const toRelativeImageUrl = (url, baseUrl) => {
-  if (!url) return null;
-  if (baseUrl && url.startsWith(baseUrl)) {
-    return url.slice(baseUrl.length);
-  }
-  return url;
+  return toRelative(url);
+};
+
+// ✅ Optional status filter — pass ?status=active or ?status=inactive on any
+// listing endpoint to filter. Omit it (or pass anything else) to get
+// everything, exactly like before — this is fully backwards compatible.
+const buildStatusFilter = (req) => {
+  const { status } = req.query;
+  return ["active", "inactive"].includes(status) ? { status } : {};
 };
 
 // ✅ Get all products (existing function - now filters by collection optionally)
@@ -58,6 +60,7 @@ async function GetProducts(req, res) {
     const offset = (page - 1) * limit;
 
     const { count, rows } = await Product.findAndCountAll({
+      where: buildStatusFilter(req),
       include: [
         {
           model: Category,
@@ -273,6 +276,7 @@ async function GetLoomProducts(req, res) {
     const { count, rows } = await Product.findAndCountAll({
       where: {
         loom: true,
+        ...buildStatusFilter(req),
       },
       include: [
         {
@@ -411,6 +415,184 @@ async function RemoveFromLoom(req, res) {
     return res.status(500).json({
       success: false,
       message: "Failed to remove product from loom",
+    });
+  }
+}
+
+// ============ NEW ARRIVALS (same pattern as loom, no cap) ============
+
+// ✅ NEW: GET all products marked as New Arrival
+async function GetNewArrivals(req, res) {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    const { count, rows } = await Product.findAndCountAll({
+      where: {
+        isNewArrival: true,
+        ...buildStatusFilter(req),
+      },
+      include: [
+        {
+          model: Category,
+          as: "category",
+          attributes: ["id", "name", "collection"],
+        },
+        {
+          model: SubCategory,
+          as: "subcategory",
+          attributes: ["id", "name"],
+        },
+        {
+          model: ProductAttribute,
+          as: "attributes",
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+      limit,
+      offset,
+      distinct: true,
+    });
+
+    const baseUrl = getBaseUrl(req);
+    const productsWithFullUrls = addFullImageUrls(rows, baseUrl);
+
+    return res.status(200).json({
+      success: true,
+      products: productsWithFullUrls,
+      currentPage: page,
+      totalPages: Math.ceil(count / limit),
+      total: count,
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch new arrivals",
+    });
+  }
+}
+
+// ✅ NEW: Add a product to New Arrivals
+async function AddToNewArrival(req, res) {
+  try {
+    const { productId } = req.params;
+
+    const product = await Product.findByPk(productId);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    if (product.isNewArrival) {
+      return res.status(409).json({
+        success: false,
+        message: "Product is already marked as a new arrival",
+      });
+    }
+
+    product.isNewArrival = true;
+    await product.save();
+
+    const baseUrl = getBaseUrl(req);
+
+    return res.status(200).json({
+      success: true,
+      message: "Product added to new arrivals",
+      data: addFullImageUrls([product], baseUrl)[0],
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add product to new arrivals",
+    });
+  }
+}
+
+// ✅ NEW: Remove a product from New Arrivals
+async function RemoveFromNewArrival(req, res) {
+  try {
+    const { productId } = req.params;
+
+    const product = await Product.findByPk(productId);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    if (!product.isNewArrival) {
+      return res.status(404).json({
+        success: false,
+        message: "Product is not in new arrivals",
+      });
+    }
+
+    product.isNewArrival = false;
+    await product.save();
+
+    const baseUrl = getBaseUrl(req);
+
+    return res.status(200).json({
+      success: true,
+      message: "Product removed from new arrivals",
+      data: addFullImageUrls([product], baseUrl)[0],
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to remove product from new arrivals",
+    });
+  }
+}
+
+// ============ PRODUCT STATUS (active / inactive) ============
+// Same query-param style as the existing category/subcategory status toggle:
+// GET /api/products/product-status-update?id=1&status=inactive
+async function UpdateProductStatus(req, res) {
+  try {
+    const { id, status } = req.query;
+
+    if (!["active", "inactive"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be active or inactive",
+      });
+    }
+
+    const product = await Product.findByPk(id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    await product.update({ status });
+
+    const baseUrl = getBaseUrl(req);
+
+    return res.status(200).json({
+      success: true,
+      message: `Product ${status} successfully`,
+      data: addFullImageUrls([product], baseUrl)[0],
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update product status",
     });
   }
 }
@@ -1185,6 +1367,10 @@ module.exports = {
   GetLoomProducts,
   AddToLoom,
   RemoveFromLoom,
+  GetNewArrivals,
+  AddToNewArrival,
+  RemoveFromNewArrival,
+  UpdateProductStatus,
   CreateProduct,
   UpdateProduct,
   DeleteProduct,

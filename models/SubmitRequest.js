@@ -101,7 +101,7 @@ const SubmitRequest = sequelize.define(
         },
     },
     {
-        tableName: 'SubmitRequests',
+        tableName: 'submitrequests',
         timestamps: true,
     }
 );

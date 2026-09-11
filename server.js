@@ -92,10 +92,21 @@ app.use((err, req, res, next) => {
         });
     }
 
-    if (err.message === "Only image files are allowed") {
+    if (
+        err.message === "Only image files are allowed" ||
+        err.message === "Only images, PDFs, and documents (.doc/.docx) are allowed"
+    ) {
         return res.status(400).json({
             success: false,
             message: err.message,
+        });
+    }
+
+    // Any other Multer error (e.g. unexpected field, missing destination)
+    if (err.name === "MulterError") {
+        return res.status(400).json({
+            success: false,
+            message: `Upload error: ${err.message}`,
         });
     }
 
